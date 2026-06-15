@@ -137,6 +137,8 @@ module csr_unit
     logic [31:0] updated_csr;
     logic [31:0] next_csr;
 
+    logic [2:0] mstatus_case_raw;
+
     logic exception_delegated;
     logic interrupt_delegated;
     logic [ECODE_W-1:0] interrupt_cause;
@@ -362,8 +364,9 @@ generate if (CONFIG.MODES != BARE) begin : gen_csr_m_mode
     one_hot_to_integer #(6)
     mstatus_case_one_hot (
         .one_hot ({sret, mret, exception_pkt.valid, interrupt_taken, (mwrite_en(MSTATUS) | swrite_en(SSTATUS)), 1'b0}), 
-        .int_out (mstatus_case)
+        .int_out (mstatus_case_raw)
     );
+    assign mstatus_case = mstatus_cases_t'(mstatus_case_raw);
 
     always_comb begin
         case (mstatus_case) inside
