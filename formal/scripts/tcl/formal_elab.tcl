@@ -1,12 +1,7 @@
-# JasperGold smoke test for bringing up the legacy CVA5 formal wrapper.
+# JasperGold elaboration-only smoke test for the CVA5 formal wrapper.
 #
-# Run from the repository root, or from any directory:
-#   jg -tcl formal/scripts/tcl/axi_smoke.tcl
-#
-# This script is intentionally small: it analyzes the RTL filelist, analyzes the
-# formal AXI files, elaborates cva5_formal_wrapper, then proves only the AXI
-# smoke properties. Filelist generation is managed by formal/scripts/run_jg.sh
-# or make formal-filelist.
+# This target uses the same analyzer and elaboration options as axi_smoke.tcl,
+# but stops before clocks, resets, assumptions, covers, or proofs are applied.
 
 clear -all
 set_engine_mode {B}
@@ -36,13 +31,3 @@ elaborate -top cva5_formal_wrapper \
     -bbox_a 17000 \
     -bbox_mul 67 \
     -bbox_m sixinput_pop_count
-
-clock clk
-reset rst
-
-set AXI_PROPS <embedded>::cva5_formal_wrapper.u_cva5_fbm.u_ppb_axi
-set FBM <embedded>::cva5_formal_wrapper.u_cva5_fbm
-
-prove -property ${AXI_PROPS}.master_*
-prove -property ${AXI_PROPS}.cover_*
-prove -property ${FBM}.cover_*

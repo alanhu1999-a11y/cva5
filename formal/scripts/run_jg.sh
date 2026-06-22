@@ -68,6 +68,9 @@ if [[ "${UPDATE_FILELIST}" -eq 1 ]]; then
     "${REPO_ROOT}/formal/scripts/populate_cva5_rtl_vfile.sh"
 fi
 
+export CVA5_ROOT="${REPO_ROOT}"
+export JG_CVA5_RTL_PATH="${REPO_ROOT}"
+
 if [[ -z "${RUN_NAME}" ]]; then
     RUN_NAME="$(date +%Y%m%d_%H%M%S)"
 fi

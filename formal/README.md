@@ -6,8 +6,9 @@ This directory contains the JasperGold bring-up flow for CVA5.
 Quick start:
 
 ```sh
-make -C formal formal-axi-smoke
-make -C formal formal-axi-smoke GUI=1
+make formal-axi-smoke
+make formal-elab
+make formal-axi-smoke GUI=1
 ```
 
 The same targets can be run from inside this directory without `-C formal`.
@@ -15,7 +16,8 @@ The same targets can be run from inside this directory without `-C formal`.
 Targets:
 
 - `make formal-filelist` regenerates `formal/filelists/cva5_rtl.vfile` from `tools/compile_order`.
-- `make formal-axi-smoke` runs `formal/scripts/tcl/axi_smoke.tcl`.
+- `make formal-elab` runs Jasper analysis/elaboration only.
+- `make formal-axi-smoke` runs the AXI-focused smoke proof in `formal/scripts/tcl/axi_smoke.tcl`.
 - `make formal-list` lists available Tcl targets.
 - `make formal-clean` removes generated run directories.
 
@@ -26,7 +28,7 @@ Layout:
 - `scripts/tcl/` contains Jasper Tcl targets.
 - `scripts/run_jg.sh` creates run directories and launches Jasper.
 - `filelists/` contains generated analyzer filelists.
-- `runs/` contains generated Jasper logs and projects and is not tracked.
+- `runs/` contains generated logs and projects and is not tracked.
 
 Environment:
 

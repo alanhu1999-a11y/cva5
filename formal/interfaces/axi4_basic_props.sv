@@ -39,6 +39,7 @@ module axi4_basic_props(
     logic r_accepted;
     logic next_ar_trx_os;
     logic [5:0] curr_trx_rid;
+    logic arvalid_wait;
 
     logic aw_trx_os;
     logic w_trx_os;
@@ -48,6 +49,8 @@ module axi4_basic_props(
     logic next_aw_trx_os;
     logic next_w_trx_os;
     logic [5:0] curr_trx_wid;
+    logic awvalid_wait;
+    logic wvalid_wait;
 
    
 //------------------------------------------------------------//
@@ -58,6 +61,7 @@ module axi4_basic_props(
 
     assign ar_accepted = axi_if.arvalid & axi_if.arready;
     assign r_accepted = axi_if.rvalid & axi_if.rready;
+    assign arvalid_wait = axi_if.arvalid & !axi_if.arready;
 
     always @*
     begin
@@ -84,13 +88,24 @@ module axi4_basic_props(
             curr_trx_rid <= axi_if.arid;
     end
 
-    env_no_rresponse_if_no_os: assert property(@(posedge clk) disable iff (rst)
+    env_no_rresponse_if_no_os: assume property(@(posedge clk) disable iff (rst)
         r_accepted  |-> ar_trx_os > 'd0);
 
-    env_arid_match_rid: assert property(@(posedge clk) disable iff (rst)
+    env_arid_match_rid: assume property(@(posedge clk) disable iff (rst)
         axi_if.rvalid  |-> (axi_if.rid == curr_trx_rid));
 
-    env_no_arrequest_if_max_os: assert property(@(posedge clk) disable iff (rst)
+    env_no_arready_if_max_os: assume property(@(posedge clk) disable iff (rst)
+        (ar_trx_os >= l_max_os) |-> !axi_if.arready);
+
+    master_arvalid_held_until_ready: assert property(@(posedge clk) disable iff (rst)
+        arvalid_wait |=> axi_if.arvalid);
+
+    master_araddr_stable_until_ready: assert property(@(posedge clk) disable iff (rst)
+        arvalid_wait |=> $stable({axi_if.araddr, axi_if.arlen, axi_if.arsize,
+                                  axi_if.arburst, axi_if.arcache, axi_if.arlock,
+                                  axi_if.arid}));
+
+    master_read_outstanding_limit: assert property(@(posedge clk) disable iff (rst)
         ar_accepted |-> (ar_trx_os < l_max_os));
         
                 
@@ -101,6 +116,8 @@ module axi4_basic_props(
     assign aw_accepted = axi_if.awvalid & axi_if.awready;
     assign w_accepted = axi_if.wvalid & axi_if.wready;
     assign b_accepted = axi_if.bvalid & axi_if.bready;
+    assign awvalid_wait = axi_if.awvalid & !axi_if.awready;
+    assign wvalid_wait = axi_if.wvalid & !axi_if.wready;
 
     always @*
     begin
@@ -146,16 +163,36 @@ module axi4_basic_props(
             curr_trx_wid <= axi_if.awid;
     end
 
-    env_no_bresponse_if_no_os: assert property(@(posedge clk) disable iff (rst)
+    env_no_bresponse_if_no_os: assume property(@(posedge clk) disable iff (rst)
         b_accepted  |-> (aw_trx_os > 'd0) && (w_trx_os > 'd0));
 
-    env_awid_match_bid: assert property(@(posedge clk) disable iff (rst)
+    env_awid_match_bid: assume property(@(posedge clk) disable iff (rst)
         axi_if.bvalid  |-> (axi_if.bid == curr_trx_wid));
 
-    env_no_awrequest_if_max_os: assert property(@(posedge clk) disable iff (rst)
+    env_no_awready_if_max_os: assume property(@(posedge clk) disable iff (rst)
+        (aw_trx_os >= l_max_os) |-> !axi_if.awready);
+
+    env_no_wready_if_max_os: assume property(@(posedge clk) disable iff (rst)
+        (w_trx_os >= l_max_os) |-> !axi_if.wready);
+
+    master_awvalid_held_until_ready: assert property(@(posedge clk) disable iff (rst)
+        awvalid_wait |=> axi_if.awvalid);
+
+    master_awaddr_stable_until_ready: assert property(@(posedge clk) disable iff (rst)
+        awvalid_wait |=> $stable({axi_if.awaddr, axi_if.awlen, axi_if.awsize,
+                                  axi_if.awburst, axi_if.awcache, axi_if.awlock,
+                                  axi_if.awid}));
+
+    master_wvalid_held_until_ready: assert property(@(posedge clk) disable iff (rst)
+        wvalid_wait |=> axi_if.wvalid);
+
+    master_wdata_stable_until_ready: assert property(@(posedge clk) disable iff (rst)
+        wvalid_wait |=> $stable({axi_if.wdata, axi_if.wstrb, axi_if.wlast}));
+
+    master_write_address_outstanding_limit: assert property(@(posedge clk) disable iff (rst)
         aw_accepted |-> (aw_trx_os < l_max_os));
 
-    env_no_wrequest_if_max_os: assert property(@(posedge clk) disable iff (rst)
+    master_write_data_outstanding_limit: assert property(@(posedge clk) disable iff (rst)
         w_accepted |-> (w_trx_os < l_max_os));
 
     // Basic read transaction can complete.
