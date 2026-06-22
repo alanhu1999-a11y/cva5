@@ -412,7 +412,7 @@ generate if (CONFIG.MODES != BARE) begin : gen_csr_m_mode
             MSTATUS_SRET : begin
                 mstatus_new.sie = mstatus.spie;
                 mstatus_new.spie = 1;
-                mstatus_new.spp = USER_PRIVILEGE[0];
+                mstatus_new.spp = 1'b0;
                 mstatus_new.mprv = 0;
             end
             MSTATUS_INTERRUPT, MSTATUS_EXCEPTION : begin

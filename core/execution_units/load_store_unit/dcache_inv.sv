@@ -84,6 +84,86 @@ module dcache_inv
 
     logic resetting;
 
+    //Snooping
+    //Invalidate a line in the tagbank upon a hit
+    line_t snoop_line;
+    tag_t snoop_tag;
+    logic snoop_valid;
+    tb_entry_t[CONFIG.DCACHE.WAYS-1:0] snoop_rdata;
+    line_t snoop_line_r;
+    tag_t snoop_tag_r;
+    logic[CONFIG.DCACHE.WAYS-1:0] snoop_hit;
+    logic snoop_write;
+
+    //Random replacement policy (cycler)
+    logic[CONFIG.DCACHE.WAYS-1:0] replacement_way;
+
+    //Tagbank
+    logic a_en;
+    logic[CONFIG.DCACHE.WAYS-1:0] a_wbe;
+    tb_entry_t a_wdata;
+    line_t a_addr;
+    tb_entry_t[CONFIG.DCACHE.WAYS-1:0] a_rdata;
+    logic stage1_tb_write;
+    logic stage1_tb_wval;
+    logic stage1_tb_write_r;
+    logic inv_matches_stage1;
+    logic stage1_tb_wval_r;
+    logic[CONFIG.DCACHE.WAYS-1:0] hit_ohot_r;
+    //Hit detection
+    logic hit;
+    logic hit_r;
+    logic[CONFIG.DCACHE.WAYS-1:0] hit_ohot;
+    //Reset routine
+    logic b_en;
+    logic[CONFIG.DCACHE.WAYS-1:0] b_wbe;
+    tb_entry_t b_wdata;
+    line_t b_addr;
+    logic rst_invalid;
+    line_t rst_line;
+
+    //Atomic read/modify/write state machine
+    typedef enum {
+        RMW_IDLE,
+        RMW_READ,
+        RMW_WRITE,
+        RMW_FILLING
+    } rmw_state_t;
+    rmw_state_t current_state;
+    rmw_state_t next_state;
+    logic rmw_mem_request;
+    logic rmw_mem_rnw;
+    logic rmw_stage1_tb_write;
+    logic rmw_db_wen;
+    logic[31:0] rmw_db_wdata;
+    logic rmw_ls_data_valid;
+    logic rmw_stage1_done;
+    logic rmw_retry;
+    logic force_miss;
+    logic return_done;
+
+    //Supporting logic
+    logic ack_r;
+    logic request_sent;
+    logic correct_word;
+    block_t word_counter;
+
+    //Stage 1 request handling
+    logic db_wen;
+    logic[CONFIG.DCACHE.WAYS-1:0] db_way;
+    logic[31:0] db_wdata;
+    logic lr_valid;
+
+    //Atomics
+    logic local_reservation_valid;
+
+    //Databank
+    logic[DB_ADDR_LEN-1:0] db_addr;
+    logic[CONFIG.DCACHE.WAYS-1:0][31:0] db_entries;
+    logic[31:0] db_hit_entry;
+    logic[CONFIG.DCACHE.WAYS-1:0][3:0] db_wbe_full;
+    logic[$clog2(CONFIG.DCACHE.WAYS > 1 ? CONFIG.DCACHE.WAYS : 2)-1:0] hit_int;
+
     ////////////////////////////////////////////////////
     //Implementation
     always_ff @(posedge clk) begin
@@ -130,15 +210,6 @@ module dcache_inv
 
     ////////////////////////////////////////////////////
     //Snooping
-    //Invalidate a line in the tagbank upon a hit
-    line_t snoop_line;
-    tag_t snoop_tag;
-    logic snoop_valid;
-    tb_entry_t[CONFIG.DCACHE.WAYS-1:0] snoop_rdata;
-    line_t snoop_line_r;
-    tag_t snoop_tag_r;
-    logic[CONFIG.DCACHE.WAYS-1:0] snoop_hit;
-    logic snoop_write;
 
     //Technically snoop addresses do not need to lie within our addressable space, so their tag should be wider
     //But this is a niche scenario and there is no harm in aliasing requests into our address space (beyond performance)
@@ -162,7 +233,6 @@ module dcache_inv
     end
 
     //Random replacement policy (cycler)
-    logic[CONFIG.DCACHE.WAYS-1:0] replacement_way;
     cycler #(.C_WIDTH(CONFIG.DCACHE.WAYS)) replacement_policy (
         .en(ls.new_request),
         .one_hot(replacement_way),
@@ -173,18 +243,6 @@ module dcache_inv
     //Snoops are always accepted and cannot be delayed
     //Port A therefore handles all requests and snoop writes
     //Port B handles snoop reads + resets
-    logic a_en;
-    logic[CONFIG.DCACHE.WAYS-1:0] a_wbe;
-    tb_entry_t a_wdata;
-    line_t a_addr;
-    tb_entry_t[CONFIG.DCACHE.WAYS-1:0] a_rdata;
-    logic stage1_tb_write;
-    logic stage1_tb_wval;
-    logic stage1_tb_write_r;
-    logic inv_matches_stage1;
-    logic stage1_tb_wval_r;
-    logic[CONFIG.DCACHE.WAYS-1:0] hit_ohot_r;
-
     assign a_en = snoop_write | stage1_tb_write_r | ls.new_request; // & ~inv_matches_stage1 )
     assign a_wbe = ({CONFIG.DCACHE.WAYS{snoop_write}} & snoop_hit) | ({CONFIG.DCACHE.WAYS{stage1_tb_write_r}} & (stage1_type == CBO | (stage1_type == AMO_RMW & hit_r) ? hit_ohot_r : replacement_way));
 
@@ -203,12 +261,6 @@ module dcache_inv
     };
 
     //Reset routine
-    logic b_en;
-    logic[CONFIG.DCACHE.WAYS-1:0] b_wbe;
-    tb_entry_t b_wdata;
-    line_t b_addr;
-    logic rst_invalid;
-    line_t rst_line;
     assign resetting = ~rst_invalid;
 
     assign b_en = mem.inv | resetting;
@@ -245,10 +297,6 @@ module dcache_inv
     .*);
 
     //Hit detection
-    logic hit;
-    logic hit_r;
-    logic[CONFIG.DCACHE.WAYS-1:0] hit_ohot;
-
     always_comb begin
         hit_ohot = '0;
         for (int i = 0; i < CONFIG.DCACHE.WAYS; i++)
@@ -266,26 +314,6 @@ module dcache_inv
     ////////////////////////////////////////////////////
     //Atomic read/modify/write state machine
     //Separate from other logic because atomic requests will need to be retried on a snoop invalidation
-    typedef enum {
-        RMW_IDLE,
-        RMW_READ,
-        RMW_WRITE,
-        RMW_FILLING
-    } rmw_state_t;
-    rmw_state_t current_state;
-    rmw_state_t next_state;
-
-    logic rmw_mem_request;
-    logic rmw_mem_rnw;
-    logic rmw_stage1_tb_write;
-    logic rmw_db_wen;
-    logic[31:0] rmw_db_wdata;
-    logic rmw_ls_data_valid;
-    logic rmw_stage1_done;
-    logic rmw_retry;
-    logic force_miss;
-    logic return_done;
-
     always_ff @(posedge clk) begin
         if (rst)
             current_state <= RMW_IDLE;
@@ -354,7 +382,6 @@ module dcache_inv
     //Various piece of additional stateful logic supporting stage one requests
 
     //Tagbank write logic; always on ack_r because it is guaranteed that there won't be a conflicting snoop tb write
-    logic ack_r;
     always_ff @(posedge clk) begin
         ack_r <= mem.ack;
         stage1_tb_write_r <= stage1_tb_write;
@@ -362,7 +389,6 @@ module dcache_inv
     end
 
     //Track if a request has been sent in stage 1 to prevent duplicates
-    logic request_sent;
     always_ff @(posedge clk) begin
         if (rst | stage1_done)
             request_sent <= 0;
@@ -386,8 +412,6 @@ module dcache_inv
     end
 
     //Fill burst word counting
-    logic correct_word;
-    block_t word_counter;
     assign return_done = mem.rvalid & (stage1.uncacheable | word_counter == SCONFIG.SUB_LINE_ADDR_W'(CONFIG.DCACHE.LINE_W-1));
     assign correct_word = mem.rvalid & (stage1.uncacheable | word_counter == stage1.addr[2+:SCONFIG.SUB_LINE_ADDR_W]);
     always_ff @(posedge clk) begin
@@ -401,11 +425,6 @@ module dcache_inv
     ////////////////////////////////////////////////////
     //Stage 1 request handling
     //Heavily dependent on request type
-    logic db_wen;
-    logic[CONFIG.DCACHE.WAYS-1:0] db_way;
-    logic[31:0] db_wdata;
-    logic lr_valid;
-
     always_comb begin
         unique case (stage1_type)
             WRITE : begin
@@ -485,13 +504,11 @@ module dcache_inv
     assign mem.wbe = stage1.be;
     assign mem.rlen = stage1.uncacheable ? '0 : 5'(CONFIG.DCACHE.LINE_W-1);
     
-    logic[DB_ADDR_LEN-1:0] db_addr;
     assign ls.ready = ~resetting & ~snoop_write & (~stage1_valid | stage1_done) & ~(db_wen & load_peek & load_addr_peek[31:DB_ADDR_LEN+2] == stage1.addr[31:DB_ADDR_LEN+2] & load_addr_peek[2+:DB_ADDR_LEN] == db_addr);
     assign write_outstanding = (stage1_valid & ~(stage1_type inside {READ, AMO_LR})) | mem.write_outstanding;
 
     ////////////////////////////////////////////////////
     //Atomics
-    logic local_reservation_valid;
     //local_reservation_valid is with respect to invalidations, the amo.reservation_valid is for other ports
     assign lr_valid = amo_unit.reservation_valid & local_reservation_valid;
 
@@ -521,11 +538,6 @@ module dcache_inv
 
     ////////////////////////////////////////////////////
     //Databank
-    logic[CONFIG.DCACHE.WAYS-1:0][31:0] db_entries;
-    logic[31:0] db_hit_entry;
-    logic[CONFIG.DCACHE.WAYS-1:0][3:0] db_wbe_full;
-    logic[$clog2(CONFIG.DCACHE.WAYS > 1 ? CONFIG.DCACHE.WAYS : 2)-1:0] hit_int;
-
     always_comb begin
         for (int i = 0; i < CONFIG.DCACHE.WAYS; i++)
             db_wbe_full[i] = {4{db_way[i]}} & stage1.be;
