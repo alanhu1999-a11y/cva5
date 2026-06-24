@@ -86,6 +86,12 @@ mkdir -p "${PROJECT_DIR}"
     echo "tcl=${TCL_FILE}"
     echo "run_dir=${RUN_DIR}"
     echo "project_dir=${PROJECT_DIR}"
+    if [[ -n "${JG_PROPERTY:-}" ]]; then
+        echo "property=${JG_PROPERTY}"
+    fi
+    if [[ -n "${JG_TIME_LIMIT:-}" ]]; then
+        echo "time_limit=${JG_TIME_LIMIT}"
+    fi
     echo "started=$(date -Is)"
     jg -version 2>&1 || true
 } > "${RUN_DIR}/command.txt"

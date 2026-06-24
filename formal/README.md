@@ -9,6 +9,9 @@ Quick start:
 make formal-axi-smoke
 make formal-elab
 make formal-axi-smoke GUI=1
+make formal-axi-master-smoke GUI=0
+make formal-axi-master-property PROPERTY=master_arvalid_held_until_ready GUI=0
+make formal-axi-checker-property PROPERTY=helper_read_count_increment GUI=0
 ```
 
 The same targets can be run from inside this directory without `-C formal`.
@@ -17,7 +20,13 @@ Targets:
 
 - `make formal-filelist` regenerates `formal/filelists/cva5_rtl.vfile` from `tools/compile_order`.
 - `make formal-elab` runs Jasper analysis/elaboration only.
-- `make formal-axi-smoke` runs the AXI-focused smoke proof in `formal/scripts/tcl/axi_smoke.tcl`.
+- `make formal-axi-smoke` runs AXI and startup reachability covers.
+- `make formal-axi-property PROPERTY=<label>` proves one AXI assertion or an explicit wildcard group.
+- `make formal-axi-master-smoke` checks AXI master reachability without elaborating the full core.
+- `make formal-axi-master-property PROPERTY=<label>` proves one AXI assertion against the unit-level master harness.
+- `make formal-axi-checker-property PROPERTY=helper_<label>` validates checker bookkeeping with abstract AXI handshakes.
+
+Focused property targets default to `TIME_LIMIT=5m`; override it explicitly for deeper proofs.
 - `make formal-list` lists available Tcl targets.
 - `make formal-clean` removes generated run directories.
 

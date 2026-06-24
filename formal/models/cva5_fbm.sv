@@ -156,14 +156,14 @@ module cva5_fbm (
     assign instruction_bram.data_out = smoke_instruction_rom(instruction_bram.addr);
     assign data_bram.data_out = 32'b0;
 
-    assign m_axi.arready = smoke_initialized & axi_ready_phase & !axi_read_pending;
+    assign m_axi.arready = smoke_initialized & axi_ready_phase;
     assign m_axi.rvalid = smoke_initialized & axi_read_pending & (axi_read_delay == '0);
     assign m_axi.rdata = 32'hc0de_0001;
     assign m_axi.rresp = 2'b0;
     assign m_axi.rlast = m_axi.rvalid;
     assign m_axi.rid = axi_read_id;
-    assign m_axi.awready = smoke_initialized & axi_ready_phase & !axi_aw_seen & !axi_write_pending;
-    assign m_axi.wready = smoke_initialized & !axi_ready_phase & !axi_w_seen & !axi_write_pending;
+    assign m_axi.awready = smoke_initialized & axi_ready_phase;
+    assign m_axi.wready = smoke_initialized & !axi_ready_phase;
     assign m_axi.bvalid = smoke_initialized & axi_write_pending & (axi_write_delay == '0);
     assign m_axi.bresp = 2'b0;
     assign m_axi.bid = axi_write_id;
