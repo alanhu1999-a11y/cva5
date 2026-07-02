@@ -11,6 +11,8 @@ make formal-elab
 make formal-axi-smoke GUI=1
 make formal-axi-master-smoke GUI=0
 make formal-axi-master-property PROPERTY=master_arvalid_held_until_ready GUI=0
+make formal-axi-master-read-smoke GUI=0
+make formal-axi-master-read-property PROPERTY=master_arvalid_held_until_ready GUI=0
 make formal-axi-checker-property PROPERTY=helper_read_count_increment GUI=0
 ```
 
@@ -24,6 +26,8 @@ Targets:
 - `make formal-axi-property PROPERTY=<label>` proves one AXI assertion or an explicit wildcard group.
 - `make formal-axi-master-smoke` checks AXI master reachability without elaborating the full core.
 - `make formal-axi-master-property PROPERTY=<label>` proves one AXI assertion against the unit-level master harness.
+- `make formal-axi-master-read-smoke` checks read-address reachability in the read-only unit harness.
+- `make formal-axi-master-read-property PROPERTY=<label>` proves one read-address assertion in the read-only unit harness.
 - `make formal-axi-checker-property PROPERTY=helper_<label>` validates checker bookkeeping with abstract AXI handshakes.
 
 Focused property targets default to `TIME_LIMIT=5m`; override it explicitly for deeper proofs.

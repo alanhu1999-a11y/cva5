@@ -92,6 +92,12 @@ mkdir -p "${PROJECT_DIR}"
     if [[ -n "${JG_TIME_LIMIT:-}" ]]; then
         echo "time_limit=${JG_TIME_LIMIT}"
     fi
+    if [[ -n "${AXI_READ_USE_PROVEN_LEMMAS:-}" ]]; then
+        echo "axi_read_use_proven_lemmas=${AXI_READ_USE_PROVEN_LEMMAS}"
+    fi
+    if [[ -n "${JG_ENGINE_MODE:-}" ]]; then
+        echo "engine_mode=${JG_ENGINE_MODE}"
+    fi
     echo "started=$(date -Is)"
     jg -version 2>&1 || true
 } > "${RUN_DIR}/command.txt"
