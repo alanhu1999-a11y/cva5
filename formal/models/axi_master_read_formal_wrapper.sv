@@ -29,6 +29,13 @@ module axi_master_read_harness
     logic dut_in_waiting_read;
     logic accept_new_lsu_request;
     logic ar_backpressure_seen;
+    logic ar_accepted;
+    logic r_accepted;
+    logic read_pending;
+    logic read_completion;
+    logic r_accepted_q;
+    logic read_pending_q;
+    logic [31:0] rdata_q;
 
     assign ls_if.new_request = ls_new_request;
     assign ls_if.addr = ls_addr;
@@ -66,6 +73,34 @@ module axi_master_read_harness
             ar_backpressure_seen <= axi_if.arvalid && !axi_if.arready;
     end
 
+    assign ar_accepted = axi_if.arvalid && axi_if.arready;
+    assign r_accepted = axi_if.rvalid && axi_if.rready;
+    assign read_completion = ls_if.data_valid && ls_if.ready;
+
+    always_ff @(posedge clk) begin
+        if (rst | !formal_active) begin
+            read_pending <= 1'b0;
+        end else begin
+            unique case ({r_accepted, ar_accepted})
+                2'b01: read_pending <= 1'b1;
+                2'b10: read_pending <= 1'b0;
+                default: read_pending <= read_pending;
+            endcase
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst | !formal_active) begin
+            r_accepted_q <= 1'b0;
+            read_pending_q <= 1'b0;
+            rdata_q <= '0;
+        end else begin
+            r_accepted_q <= r_accepted;
+            read_pending_q <= read_pending;
+            rdata_q <= axi_if.rdata;
+        end
+    end
+
     // Read requests are one-cycle commands accepted only while the subunit is
     // ready. The final proof target intentionally does not assume eventual
     // ARREADY; that bound is used only by the cover/debug top.
@@ -77,6 +112,14 @@ module axi_master_read_harness
 
     env_quiet_during_warmup: assume property (@(posedge clk) disable iff (rst)
         !formal_active |-> !ls_new_request && !axi_rvalid);
+
+    // The DUT ties RREADY high, so an early RVALID cannot be rejected by this
+    // master. Treat impossible read responses as AXI slave environment errors.
+    env_no_early_read_response: assume property (@(posedge clk) disable iff (rst | !formal_active)
+        axi_if.rvalid |-> read_pending);
+
+    env_single_beat_read_response: assume property (@(posedge clk) disable iff (rst | !formal_active)
+        axi_if.rvalid |-> axi_if.rlast);
 
     generate
         if (BOUND_ARREADY_FOR_COVER) begin : gen_cover_bound
@@ -189,6 +232,39 @@ module axi_master_read_harness
     dut_read_only_no_write_valid: assert property (@(posedge clk) disable iff (rst | !formal_active)
         !axi_if.awvalid && !axi_if.wvalid);
 
+    dut_ar_accept_creates_pending_read: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        ar_accepted |=> read_pending);
+
+    dut_read_pending_holds_without_r_response: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        read_pending && !r_accepted |=> read_pending);
+
+    dut_read_pending_implies_waiting_read: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        read_pending |-> dut_in_waiting_read);
+
+    dut_waiting_read_holds_until_rvalid: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        dut_in_waiting_read && !axi_if.rvalid |=> dut_in_waiting_read);
+
+    dut_r_response_clears_pending_read: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        r_accepted |=> !read_pending);
+
+    dut_r_response_returns_to_ready: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        dut_in_waiting_read && r_accepted |=> u_dut.current_state == u_dut.READY);
+
+    dut_r_response_completes_lsu: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        dut_in_waiting_read && r_accepted |=> read_completion);
+
+    dut_read_completion_follows_r_response: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        read_completion |-> r_accepted_q && read_pending_q);
+
+    dut_rdata_maps_to_ls_data_out: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        read_completion |-> ls_if.data_out == rdata_q);
+
+    dut_rvalid_drives_ls_data_valid: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        dut_in_waiting_read && r_accepted |=> ls_if.data_valid);
+
+    dut_rvalid_drives_ls_ready: assert property (@(posedge clk) disable iff (rst | !formal_active)
+        dut_in_waiting_read && r_accepted |=> ls_if.ready);
+
     cover_read_request: cover property (@(posedge clk) disable iff (rst | !formal_active)
         ls_new_request);
 
@@ -196,6 +272,15 @@ module axi_master_read_harness
         ls_new_request ##[1:4]
         axi_if.arvalid && !axi_if.arready ##[1:4]
         axi_if.arvalid && axi_if.arready);
+
+    cover_read_response: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ar_accepted ##[1:8] r_accepted);
+
+    cover_read_response_lifecycle: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        ar_accepted ##[1:8]
+        r_accepted ##1
+        read_completion && !read_pending && u_dut.current_state == u_dut.READY);
 
     cover_addr_changes_during_requesting_read_wait: cover property (@(posedge clk) disable iff (rst | !formal_active)
         dut_in_requesting_read && !axi_if.arready ##1 $changed(u_dut.addr));

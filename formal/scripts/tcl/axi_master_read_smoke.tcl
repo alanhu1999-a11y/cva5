@@ -11,3 +11,5 @@ source $COMMON_TCL
 
 prove -property ${AXI_MASTER_READ_HARNESS}.cover_read_request
 prove -property ${AXI_MASTER_READ_HARNESS}.cover_read_backpressure
+prove -property ${AXI_MASTER_READ_HARNESS}.cover_read_response
+prove -property ${AXI_MASTER_READ_HARNESS}.cover_read_response_lifecycle
