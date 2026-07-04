@@ -87,6 +87,10 @@ formal-axi-master-combined-cross-safety:
 formal-axi-master-combined-checker:
 	AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS='$(INCLUDE_UNDRIVEN_FIELDS)' JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target axi_master_combined_checker --gui $(GUI) --no-filelist
 
+.PHONY: formal-axi-master-combined-all-safety
+formal-axi-master-combined-all-safety:
+	AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS='$(INCLUDE_UNDRIVEN_FIELDS)' JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target axi_master_combined_all_safety --gui $(GUI) --no-filelist
+
 .PHONY: formal-axi-master-combined-closure
 formal-axi-master-combined-closure:
 	$(MAKE) formal-axi-master-combined-smoke GUI=$(GUI) ENGINE_MODE=auto INCLUDE_UNDRIVEN_FIELDS=0

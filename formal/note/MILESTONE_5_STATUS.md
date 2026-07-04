@@ -89,6 +89,12 @@ Aggregate closure:
 make formal-axi-master-combined-closure GUI=0 ENGINE_MODE=auto
 ```
 
+Single GUI/session view for local cross-safety plus checker properties:
+
+```sh
+make formal-axi-master-combined-all-safety GUI=1 ENGINE_MODE=auto
+```
+
 Single-property debug:
 
 ```sh
