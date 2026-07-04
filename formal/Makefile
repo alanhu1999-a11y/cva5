@@ -70,6 +70,29 @@ formal-axi-master-write-closure:
 	$(MAKE) formal-axi-master-write-lifecycle-safety GUI=$(GUI) TIME_LIMIT=$(TIME_LIMIT) ENGINE_MODE=auto INCLUDE_UNDRIVEN_FIELDS=0
 	$(MAKE) formal-axi-master-write-checker GUI=$(GUI) TIME_LIMIT=$(TIME_LIMIT) ENGINE_MODE=auto INCLUDE_UNDRIVEN_FIELDS=0
 
+.PHONY: formal-axi-master-combined-smoke
+formal-axi-master-combined-smoke:
+	AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS='$(INCLUDE_UNDRIVEN_FIELDS)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target axi_master_combined_smoke --gui $(GUI) --no-filelist
+
+.PHONY: formal-axi-master-combined-property
+formal-axi-master-combined-property:
+	@test -n "$(PROPERTY)" || (echo "error: set PROPERTY=<property label>" >&2; exit 1)
+	AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS='$(INCLUDE_UNDRIVEN_FIELDS)' JG_PROPERTY='$(PROPERTY)' JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target axi_master_combined_property --gui $(GUI) --no-filelist
+
+.PHONY: formal-axi-master-combined-cross-safety
+formal-axi-master-combined-cross-safety:
+	AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS='$(INCLUDE_UNDRIVEN_FIELDS)' JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target axi_master_combined_cross_safety --gui $(GUI) --no-filelist
+
+.PHONY: formal-axi-master-combined-checker
+formal-axi-master-combined-checker:
+	AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS='$(INCLUDE_UNDRIVEN_FIELDS)' JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target axi_master_combined_checker --gui $(GUI) --no-filelist
+
+.PHONY: formal-axi-master-combined-closure
+formal-axi-master-combined-closure:
+	$(MAKE) formal-axi-master-combined-smoke GUI=$(GUI) ENGINE_MODE=auto INCLUDE_UNDRIVEN_FIELDS=0
+	$(MAKE) formal-axi-master-combined-cross-safety GUI=$(GUI) TIME_LIMIT=$(TIME_LIMIT) ENGINE_MODE=auto INCLUDE_UNDRIVEN_FIELDS=0
+	$(MAKE) formal-axi-master-combined-checker GUI=$(GUI) TIME_LIMIT=$(TIME_LIMIT) ENGINE_MODE=auto INCLUDE_UNDRIVEN_FIELDS=0
+
 .PHONY: formal-axi-checker-property
 formal-axi-checker-property:
 	@test -n "$(PROPERTY)" || (echo "error: set PROPERTY=<helper property label>" >&2; exit 1)
