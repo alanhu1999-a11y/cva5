@@ -105,15 +105,15 @@ make formal-axi-master-combined-property \
 
 ## Run Metadata
 
-These runs were launched before the Milestone 5 files were committed, so the
-recorded git commit is the previous branch head and `git_dirty=1` in each
-`command.txt`.
+Clean closure was rerun from commit `50ce3a8`; each `command.txt` records
+`git_dirty=0`. See `formal/note/MILESTONE_5_CLOSURE.md` for the short review
+summary.
 
 | Target | Expected Property Set | Result | Engine Mode / Engines Seen | Run Directory | Peak Memory | Git Commit |
 |---|---|---|---|---|---:|---|
-| `formal-axi-master-combined-smoke` | 6 covers | 6 covered | `auto` / `Hp` | `formal/runs/axi_master_combined_smoke/20260704_173626` | 0.544 GB | `e34cf86`, dirty |
-| `formal-axi-master-combined-cross-safety` | 27 assertions | 27 proven | `auto` / `Mpcustom2`, `Hp`, `AM` | `formal/runs/axi_master_combined_cross_safety/20260704_173651` | 0.543 GB | `e34cf86`, dirty |
-| `formal-axi-master-combined-checker` | 21 assertions, 7 covers | 21 proven, 7 covered | `auto` / `AM`, `Mpcustom2`, `Hp` | `formal/runs/axi_master_combined_checker/20260704_173757` | 0.547 GB | `e34cf86`, dirty |
+| `formal-axi-master-combined-smoke` | 6 covers | 6 covered | `auto` / `Hp` | `formal/runs/axi_master_combined_smoke/20260704_182511` | 0.546 GB | `50ce3a8`, clean |
+| `formal-axi-master-combined-cross-safety` | 27 assertions | 27 proven | `auto` / `N`, `Mpcustom2`, `Hp` | `formal/runs/axi_master_combined_cross_safety/20260704_182528` | 0.547 GB | `50ce3a8`, clean |
+| `formal-axi-master-combined-checker` | 21 assertions, 7 covers | 21 proven, 7 covered | `auto` / `Mpcustom2`, `Hp`, `AM` | `formal/runs/axi_master_combined_checker/20260704_182627` | 0.549 GB | `50ce3a8`, clean |
 
 Covered combined harness properties:
 
