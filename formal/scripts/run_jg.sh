@@ -95,8 +95,19 @@ mkdir -p "${PROJECT_DIR}"
     if [[ -n "${AXI_READ_USE_PROVEN_LEMMAS:-}" ]]; then
         echo "axi_read_use_proven_lemmas=${AXI_READ_USE_PROVEN_LEMMAS}"
     fi
+    if [[ -n "${AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS:-}" ]]; then
+        echo "axi_write_include_undriven_fields=${AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS}"
+    fi
     if [[ -n "${JG_ENGINE_MODE:-}" ]]; then
         echo "engine_mode=${JG_ENGINE_MODE}"
+    fi
+    if command -v git >/dev/null 2>&1 && git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "git_commit=$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
+        if [[ -n "$(git -C "${REPO_ROOT}" status --short)" ]]; then
+            echo "git_dirty=1"
+        else
+            echo "git_dirty=0"
+        fi
     fi
     echo "started=$(date -Is)"
     jg -version 2>&1 || true

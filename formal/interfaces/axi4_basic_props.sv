@@ -177,18 +177,28 @@ module axi4_basic_props(
         awvalid_wait |=> axi_if.awvalid);
 
     master_awaddr_stable_until_ready: assert property(@(posedge clk) disable iff (rst)
+`ifdef AXI_WRITE_INCLUDE_UNDRIVEN_FIELD_CHECKS
+        awvalid_wait |=> $stable({axi_if.awaddr, axi_if.awlen, axi_if.awsize,
+                                  axi_if.awburst, axi_if.awcache,
+                                  axi_if.awlock, axi_if.awid}));
+`else
         // AWSIZE and AWCACHE are pending design-owner review because the
         // current RTL does not drive them.
         awvalid_wait |=> $stable({axi_if.awaddr, axi_if.awlen,
                                   axi_if.awburst, axi_if.awlock, axi_if.awid}));
+`endif
 
     master_wvalid_held_until_ready: assert property(@(posedge clk) disable iff (rst)
         wvalid_wait |=> axi_if.wvalid);
 
     master_wdata_stable_until_ready: assert property(@(posedge clk) disable iff (rst)
+`ifdef AXI_WRITE_INCLUDE_UNDRIVEN_FIELD_CHECKS
+        wvalid_wait |=> $stable({axi_if.wdata, axi_if.wstrb, axi_if.wlast}));
+`else
         // WLAST is pending design-owner review because the current RTL does
         // not drive it.
         wvalid_wait |=> $stable({axi_if.wdata, axi_if.wstrb}));
+`endif
 
     master_write_address_outstanding_limit: assert property(@(posedge clk) disable iff (rst)
         aw_outstanding <= MAX_OUTSTANDING);
