@@ -2,3 +2,4 @@ test_benches/verilator/build
 vivado/
 formal/runs/
 formal/set_env.sh
+formal/note/
