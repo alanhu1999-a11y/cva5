@@ -115,6 +115,8 @@ cores for proof cases. Named tasks expose the following areas in Jasper:
 - `AXI_READ_REQUEST_*`: embedded AR reachability, local helpers, and final AR safety.
 - `AXI_READ_RESPONSE_*`: pending-state helpers, environment legality, quick guarantees, and deep LSU/data guarantees.
 - `END_TO_END_LOAD_REACHABILITY`: anchored LW-to-AR/R/completion covers.
+- `LW_WRITEBACK_*`: anchored writeback tracker helpers and conditional
+  destination/data/register-update guarantees.
 - `CORE__85_*` and `CORE__9*`: historical, unimplemented, unrun,
   inconclusive, review-only, and boundary-inapplicable obligations.
 
@@ -138,7 +140,7 @@ Latest framework results on Jasper `2026.03p001`:
 | --- | --- | ---: | --- |
 | Setup only | Elaborated one core; named tasks, focused LW and safety stage tasks, and Proof Structure populated | 1.138 GB | `formal/runs/cva5_axi_proof_framework/20260720_173905` |
 | Default safety + COI baseline | Historical 26/26 selected assertions proven; no CEX or undetermined assertion; predates the generated-off custom-unit tieoff, so current focused reruns below are authoritative for the requested embedded obligations | 5.923 GB | `formal/runs/cva5_axi_proof_framework/20260719_212302` |
-| Anchored LW lifecycle | Covered through LSU-side completion at depth 84; witness VCD exported | 2.268 GB | `formal/runs/cva5_axi_proof_framework/20260720_164725` |
+| Anchored LW architectural trace | Covered through LSU completion/writeback at depth 84 and retirement/x2 observation at depth 86 | 2.278 GB | `formal/runs/cva5_axi_proof_framework/20260729_173358` |
 
 The 26 proven assertions comprise 4 fetch wiring helpers, 3 LSU-to-master
 address/FSM properties, 7 embedded/checker AR request properties, 7 response
@@ -159,8 +161,11 @@ denominators differ from whole-core coverage, and neither percentage is a
 substitute for assertion proof or reachability closure.
 
 Current proof boundary is intentionally limited. Full-core fetch/decode/LSU
-progress is cover evidence; the anchored LW end-to-end cover is now hit.
-Architectural register writeback, detailed load width/sign semantics,
+progress and architectural writeback are cover evidence; the anchored LW trace
+reaches writeback and the physical state selected for x2. Tracker creation,
+single-response capture, hold, and clear behavior are proven. The
+ID-to-physical-register correlation and final writeback destination/data/state
+assertions remain inconclusive. Detailed load width/sign semantics,
 misalignment/exceptions, AXI error responses, stores, and AMOs remain open.
 Strict `ARSIZE/ARCACHE/AWSIZE/AWCACHE/WLAST` closure remains assigned to the
 post-`axi_adapter` external boundary, not the direct embedded-master boundary.
@@ -206,6 +211,9 @@ Latest focused results:
 | `cover_axi_arvalid_from_lw` / `cover_axi_ar_handshake_from_lw` | Covered | 80 | `Ht`, preprocessing | 2.268 GB | full-lifecycle run |
 | `cover_axi_r_response_for_lw` | Covered | 83 | `Ht`, 4.16 s | 2.268 GB | full-lifecycle run |
 | `cover_lsu_load_completion_from_lw` / full lifecycle | Covered | 84 | `Ht`, 4.17 s / preprocessing | 2.268 GB | full-lifecycle run |
+| `cover_full_lw_reaches_writeback` | Covered | 84 | `PRE`, preprocessing | 2.278 GB | `formal/runs/cva5_axi_proof_framework/20260729_173358` |
+| `cover_full_lw_reaches_retirement` | Covered | 86 | `B`, 3.94 s | 2.278 GB | same run |
+| `cover_full_lw_updates_x2` | Covered | 86 | `PRE`, preprocessing | 2.278 GB | same run |
 
 `auto` remains the public default. Its broad full-core portfolio exceeded
 practical host memory, so the closed lifecycle witness used `Ht`, the useful
@@ -228,6 +236,27 @@ Focused embedded safety reruns are independently proven at infinite bound:
 | ARVALID held under backpressure | `auto`/AM, 0.78 s | 1.596 GB | `formal/runs/cva5_axi_proof_framework/20260720_172838` |
 | AR address/control stable under backpressure | `auto`/Hp, 17.05 s | 6.384 GB | `formal/runs/cva5_axi_proof_framework/20260720_173013` |
 
+Latest architectural-tracker helper results are also infinite-bound proofs:
+
+| Property | Engine / time | Peak memory | Run directory |
+| --- | --- | ---: | --- |
+| LW decode destination is x2/group 1 | `auto`/N, 0.19 s | 1.653 GB | `formal/runs/cva5_axi_proof_framework/20260729_183031` |
+| Writeback tracker created | `auto`/Hp, 13.32 s | 6.083 GB | `formal/runs/cva5_axi_proof_framework/20260729_180445` |
+| Writeback tracker holds | `auto`/AM, 0.78 s | 1.590 GB | `formal/runs/cva5_axi_proof_framework/20260729_180640` |
+| Writeback tracker clears | `auto`/AM, 1.03 s | 1.579 GB | `formal/runs/cva5_axi_proof_framework/20260729_180816` |
+| Correlated RDATA captured once | `auto`/Hp, 2.22 s | 1.277 GB | `formal/runs/cva5_axi_proof_framework/20260729_184014` |
+| Captured RDATA holds to writeback | `auto`/Hp, 2.14 s | 1.275 GB | `formal/runs/cva5_axi_proof_framework/20260729_183910` |
+| Retirement tracker clears | `auto`/PRE, 0.00 s | 1.275 GB | `formal/runs/cva5_axi_proof_framework/20260729_184114` |
+
+Focused guarantee runs use these independently proven assertions as explicit
+assume-guarantee cuts when `CVA5_USE_PROVEN_LW_LEMMAS=1` (the default for the
+focused safety target). The source lemmas are proved separately without cuts.
+No target guarantee is assumed. The next unresolved helper is
+`helper_lw_id_to_phys_mapping`; no counterexample was found, but the run was
+stopped after repeated host low-memory warnings. Consequently the writeback
+destination, data, register-file update, architectural x2 update, and composed
+instruction-result assertions are not claimed as proven.
+
 ## Target Summary
 
 | Area | Primary target | Scope | Current status |
@@ -235,7 +264,7 @@ Focused embedded safety reruns are independently proven at infinite bound:
 | Read-only AXI master | `formal-axi-master-read-closure` | Unit `axi_master`, read path only | Closed for AR, R lifecycle, and checker properties |
 | Write-only AXI master | `formal-axi-master-write-closure` | Unit `axi_master`, write path only | Closed for AW/W/B lifecycle and checker properties |
 | Combined AXI master | `formal-axi-master-combined-closure` | Unit `axi_master`, read/write interaction | Closed for smoke, cross-safety, and checker properties |
-| Full-core load | `formal-cva5-axi-load-stage` | One core, anchored LW staged reachability | Covered through embedded AR/R and LSU-side completion; architectural writeback remains pending |
+| Full-core load | `formal-cva5-axi-load-stage` | One core, anchored LW staged reachability | Covered through writeback, retirement, and x2-state observation; final architectural safety assertions remain inconclusive |
 
 ## Common Commands
 
@@ -387,8 +416,11 @@ fields driven by `axi_adapter.sv`.
 
 1. Review the generated-off CUSTOM-unit quiescence assumption with the design
    owner and decide whether configuration tieoffs belong in a higher wrapper.
-2. Review the anchored 84-cycle witness and the four embedded safety proofs.
-3. Keep architectural writeback, detailed load data semantics, exceptions,
-   errors, stores, AMOs, and adapter-level fields as explicit future work.
-4. Use unit-level closure and embedded-instance assertions as safety evidence;
+2. Review the anchored depth-86 witness, embedded AXI safety proofs, and the
+   independently proven writeback-tracker helpers.
+3. Decompose and close `helper_lw_id_to_phys_mapping` before claiming final
+   writeback destination/data/register-state correctness.
+4. Keep detailed load data semantics, exceptions, errors, stores, AMOs, and
+   adapter-level fields as explicit future work.
+5. Use unit-level closure and embedded-instance assertions as safety evidence;
    report the full-core LW ladder only as reachability evidence.

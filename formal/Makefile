@@ -10,6 +10,9 @@ CVA5_FRAMEWORK_RUN_DEEP_RESPONSE ?= 0
 CVA5_LOAD_MAX_JOBS ?= 2
 CVA5_LOAD_ORCHESTRATION ?= off
 CVA5_LOAD_DUMP_TRACE ?= 0
+CVA5_SAFETY_MAX_JOBS ?= 2
+CVA5_SAFETY_ORCHESTRATION ?= off
+CVA5_USE_PROVEN_LW_LEMMAS ?= 1
 
 CVA5_AXI_LOAD_STAGES = \
 	reset_release \
@@ -41,13 +44,31 @@ CVA5_AXI_LOAD_STAGES = \
 	axi_ar_handshake \
 	axi_r_response \
 	lsu_completion \
-	full_lifecycle
+	full_lifecycle \
+	writeback \
+	retirement \
+	x2_update
 
 CVA5_AXI_SAFETY_STAGES = \
 	load_accept_enters_requesting_read \
 	requesting_read_drives_arvalid \
 	embedded_arvalid_hold \
-	embedded_araddr_stability
+	embedded_araddr_stability \
+	lw_decode_destination \
+	lw_tracker_created \
+	lw_tracker_holds \
+	lw_id_to_phys_mapping \
+	lw_tracker_clears \
+	lw_rdata_capture \
+	lw_rdata_holds \
+	lw_retirement_tracker_clears \
+	lw_rdata_matches_lsu_data \
+	lw_writeback_destination \
+	lw_writeback_data \
+	lw_register_file_write_port \
+	lw_register_file_update \
+	lw_architectural_x2_update \
+	lw_instruction_result
 
 RUN_OPTS = GUI=$(GUI) TIME_LIMIT=$(TIME_LIMIT) ENGINE_MODE=$(ENGINE_MODE)
 UNIT_OPTS = $(RUN_OPTS) INCLUDE_UNDRIVEN_FIELDS=0
@@ -277,7 +298,7 @@ formal-cva5-axi-load-list-stages:
 .PHONY: formal-cva5-axi-safety-stage
 formal-cva5-axi-safety-stage:
 	@test -n "$(STAGE)" || (echo "error: set STAGE=<stage>; run make formal-cva5-axi-safety-list-stages" >&2; exit 1)
-	JG_CVA5_FRAMEWORK_SAFETY_STAGE='$(STAGE)' JG_CVA5_FRAMEWORK_RUN_PROOFS=1 JG_CVA5_FRAMEWORK_RUN_REACHABILITY=0 JG_CVA5_FRAMEWORK_RUN_DEEP_RESPONSE=0 JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target cva5_axi_proof_framework --gui $(GUI)
+	JG_CVA5_FRAMEWORK_SAFETY_STAGE='$(STAGE)' JG_CVA5_SAFETY_MAX_JOBS='$(CVA5_SAFETY_MAX_JOBS)' JG_CVA5_SAFETY_ORCHESTRATION='$(CVA5_SAFETY_ORCHESTRATION)' JG_CVA5_USE_PROVEN_LW_LEMMAS='$(CVA5_USE_PROVEN_LW_LEMMAS)' JG_CVA5_FRAMEWORK_RUN_PROOFS=1 JG_CVA5_FRAMEWORK_RUN_REACHABILITY=0 JG_CVA5_FRAMEWORK_RUN_DEEP_RESPONSE=0 JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target cva5_axi_proof_framework --gui $(GUI)
 
 .PHONY: formal-cva5-axi-safety-list-stages
 formal-cva5-axi-safety-list-stages:

@@ -27,6 +27,8 @@ module cva5_axi_proof_framework_wrapper (
     localparam logic [31:0] LW_PC = EXAMPLE_CONFIG.CSRS.RESET_VEC + 32'd4;
     localparam logic [31:2] RESET_WORD_ADDR = EXAMPLE_CONFIG.CSRS.RESET_VEC[31:2];
     localparam logic [31:0] LW_DATA_ADDR = 32'h60000000;
+    localparam rs_addr_t LW_ARCH_RD = rs_addr_t'(5'd2);
+    localparam logic [WB_GROUP_W-1:0] LS_WB_GROUP = WB_GROUP_W'(1);
 
     /////////////////////////////////////////////////////////////////
     // FORMAL SIGNALS
@@ -46,7 +48,11 @@ module cva5_axi_proof_framework_wrapper (
     id_t anchored_lui_id;
     id_t anchored_lw_id;
     phys_addr_t anchored_lui_phys_rd;
+    phys_addr_t anchored_lw_phys_rd;
+    rs_addr_t anchored_lw_arch_rd;
     logic [WB_GROUP_W-1:0] anchored_lui_wb_group;
+    logic [WB_GROUP_W-1:0] anchored_lw_wb_group;
+    logic [31:0] captured_lw_rdata;
     logic lw_startup_seen;
     logic lw_instruction_line_request_seen;
     logic lw_instruction_returned_seen;
@@ -67,6 +73,12 @@ module cva5_axi_proof_framework_wrapper (
     logic lw_axi_ar_handshake_seen;
     logic lw_axi_r_response_seen;
     logic lw_lsu_completion_seen;
+    logic lw_writeback_seen;
+    logic lw_retire_seen;
+    logic lw_arch_x2_update_seen;
+    logic lw_writeback_tracking_active;
+    logic lw_response_captured;
+    logic lw_retirement_pending;
 
     logic lw_instruction_line_request_event;
     logic lui_instruction_returned_event;
@@ -94,7 +106,17 @@ module cva5_axi_proof_framework_wrapper (
     logic lw_axi_ar_handshake_event;
     logic lw_axi_r_response_event;
     logic lw_lsu_completion_event;
+    logic lw_rdata_capture_event;
+    logic lw_writeback_event;
+    logic lw_register_file_write_event;
+    logic lw_retire_event;
+    logic lw_arch_x2_update_event;
+    logic [31:0] lw_writeback_data;
+    phys_addr_t lw_writeback_phys_rd;
+    logic [WB_GROUP_W-1:0] lw_writeback_group;
+    logic lw_writeback_suppressed;
     logic [EXAMPLE_CONFIG.NUM_WB_GROUPS-1:0] lui_commit_by_group;
+    logic [EXAMPLE_CONFIG.NUM_WB_GROUPS-1:0] lw_commit_by_group;
 
     /////////////////////////////////////////////////////////////////
     // DUT
@@ -309,12 +331,68 @@ module cva5_axi_proof_framework_wrapper (
         u_fullcore.u_cva5_core.unit_wb[LS_ID].done &&
         u_fullcore.u_cva5_core.unit_wb[LS_ID].id == anchored_lw_id;
 
+    assign lw_rdata_capture_event =
+        lw_writeback_tracking_active &&
+        lw_axi_ar_handshake_seen &&
+        !lw_response_captured &&
+        lw_axi_r_response_event;
+
+    for (genvar wb_group = 0;
+            wb_group < EXAMPLE_CONFIG.NUM_WB_GROUPS; wb_group++) begin : gen_lw_commit_observer
+        assign lw_commit_by_group[wb_group] =
+            lw_writeback_tracking_active &&
+            lw_response_captured &&
+            u_fullcore.u_cva5_core.wb_packet[wb_group].valid &&
+            u_fullcore.u_cva5_core.wb_packet[wb_group].id == anchored_lw_id;
+    end
+
+    always_comb begin
+        lw_writeback_event = 1'b0;
+        lw_writeback_data = '0;
+        lw_writeback_phys_rd = '0;
+        lw_writeback_group = '0;
+        for (int wb_group = 0;
+                wb_group < EXAMPLE_CONFIG.NUM_WB_GROUPS; wb_group++) begin
+            if (lw_commit_by_group[wb_group]) begin
+                lw_writeback_event = 1'b1;
+                lw_writeback_data =
+                    u_fullcore.u_cva5_core.wb_packet[wb_group].data;
+                lw_writeback_phys_rd =
+                    u_fullcore.u_cva5_core.wb_phys_addr[wb_group];
+                lw_writeback_group = WB_GROUP_W'(wb_group);
+            end
+        end
+    end
+
+    assign lw_writeback_suppressed =
+        u_fullcore.u_cva5_core.gc.writeback_suppress;
+    assign lw_register_file_write_event =
+        lw_writeback_event && !lw_writeback_suppressed;
+    assign lw_retire_event =
+        lw_retirement_pending &&
+        u_fullcore.u_cva5_core.wb_retire.valid &&
+        u_fullcore.u_cva5_core.wb_retire.id == anchored_lw_id;
+
+    // CVA5 architectural integer state is a rename-map entry plus the selected
+    // physical register-bank value. EXAMPLE_CONFIG assigns LS writes to bank 1.
+    assign lw_arch_x2_update_event =
+        lw_retire_event &&
+        u_fullcore.u_cva5_core.renamer_block.spec_table_ram.xilinx_gen.ram[5'd2] ==
+            {anchored_lw_phys_rd, anchored_lw_wb_group} &&
+        u_fullcore.u_cva5_core.register_file_block.register_file_gen[1].
+            register_file_bank.xilinx_gen.ram[anchored_lw_phys_rd] ==
+                captured_lw_rdata;
+
     always_ff @(posedge clk) begin
         if (rst) begin
             anchored_lui_id <= '0;
             anchored_lw_id <= '0;
             anchored_lui_phys_rd <= '0;
+            anchored_lw_phys_rd <= '0;
+            anchored_lw_arch_rd <= '0;
             anchored_lui_wb_group <= '0;
+            anchored_lw_wb_group <= '0;
+            captured_lw_rdata <= '0;
             lw_startup_seen <= 1'b0;
             lw_instruction_line_request_seen <= 1'b0;
             lw_instruction_returned_seen <= 1'b0;
@@ -335,6 +413,12 @@ module cva5_axi_proof_framework_wrapper (
             lw_axi_ar_handshake_seen <= 1'b0;
             lw_axi_r_response_seen <= 1'b0;
             lw_lsu_completion_seen <= 1'b0;
+            lw_writeback_seen <= 1'b0;
+            lw_retire_seen <= 1'b0;
+            lw_arch_x2_update_seen <= 1'b0;
+            lw_writeback_tracking_active <= 1'b0;
+            lw_response_captured <= 1'b0;
+            lw_retirement_pending <= 1'b0;
         end
         else begin
             if (formal_active)
@@ -380,6 +464,17 @@ module cva5_axi_proof_framework_wrapper (
             if (lw_fetch_complete_seen && lw_decode_event)
                 lw_decode_seen <= 1'b1;
 
+            if (lw_fetch_complete_seen && lw_decode_event &&
+                    !lw_writeback_tracking_active && !lw_retirement_pending) begin
+                anchored_lw_phys_rd <=
+                    u_fullcore.u_cva5_core.decode_phys_rd_addr;
+                anchored_lw_arch_rd <=
+                    u_fullcore.u_cva5_core.decode_rd_addr;
+                anchored_lw_wb_group <=
+                    u_fullcore.u_cva5_core.decode_rename_interface.rd_wb_group;
+                lw_writeback_tracking_active <= 1'b1;
+            end
+
             if (lw_source_mapping_event)
                 lw_source_mapping_seen <= 1'b1;
 
@@ -416,6 +511,26 @@ module cva5_axi_proof_framework_wrapper (
             if ((lw_axi_r_response_seen || lw_axi_r_response_event) &&
                     lw_lsu_completion_event)
                 lw_lsu_completion_seen <= 1'b1;
+
+            if (lw_rdata_capture_event) begin
+                captured_lw_rdata <= u_fullcore.m_axi.rdata;
+                lw_response_captured <= 1'b1;
+            end
+
+            if (lw_writeback_event) begin
+                lw_writeback_seen <= 1'b1;
+                lw_writeback_tracking_active <= 1'b0;
+                lw_response_captured <= 1'b0;
+                lw_retirement_pending <= 1'b1;
+            end
+
+            if (lw_retire_event) begin
+                lw_retire_seen <= 1'b1;
+                lw_retirement_pending <= 1'b0;
+            end
+
+            if (lw_arch_x2_update_event)
+                lw_arch_x2_update_seen <= 1'b1;
         end
     end
 
@@ -560,6 +675,115 @@ module cva5_axi_proof_framework_wrapper (
             |-> u_fullcore.u_cva5_core.load_store_unit_block.sub_unit[FULL_LS_BUS_ID].data_out ==
                 $past(u_fullcore.m_axi.rdata));
 
+    // Tracker helpers
+    helper_lw_decode_destination:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_decode_event
+            |-> u_fullcore.u_cva5_core.decode_rd_addr == LW_ARCH_RD &&
+                u_fullcore.u_cva5_core.decode_rename_interface.rd_wb_group ==
+                    LS_WB_GROUP);
+
+    helper_lw_writeback_tracker_created:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_fetch_complete_seen && lw_decode_event &&
+            !lw_writeback_tracking_active && !lw_retirement_pending
+            |=> lw_writeback_tracking_active &&
+                anchored_lw_arch_rd ==
+                    $past(u_fullcore.u_cva5_core.decode_rd_addr) &&
+                anchored_lw_phys_rd ==
+                    $past(u_fullcore.u_cva5_core.decode_phys_rd_addr) &&
+                anchored_lw_wb_group ==
+                    $past(u_fullcore.u_cva5_core.decode_rename_interface.rd_wb_group));
+
+    helper_lw_writeback_tracker_holds:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_writeback_tracking_active && !lw_writeback_event
+            |=> lw_writeback_tracking_active &&
+                $stable({anchored_lw_arch_rd,
+                         anchored_lw_phys_rd,
+                         anchored_lw_wb_group}));
+
+    helper_lw_id_to_phys_mapping:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_writeback_tracking_active
+            |-> u_fullcore.u_cva5_core.id_block.id_to_phys_rd_table.
+                    xilinx_gen.ram[anchored_lw_id] == anchored_lw_phys_rd);
+
+    helper_lw_writeback_tracker_clears:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_writeback_tracking_active && lw_writeback_event
+            |=> !lw_writeback_tracking_active &&
+                !lw_response_captured && lw_retirement_pending);
+
+    helper_lw_rdata_capture:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_rdata_capture_event
+            |=> lw_response_captured &&
+                captured_lw_rdata == $past(u_fullcore.m_axi.rdata));
+
+    helper_lw_rdata_holds_until_writeback:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_response_captured && !lw_writeback_event
+            |=> lw_response_captured && $stable(captured_lw_rdata));
+
+    helper_lw_retirement_tracker_clears:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_retirement_pending && lw_retire_event
+            |=> !lw_retirement_pending);
+
+    // LW guarantees
+    fullcore_lw_rdata_matches_lsu_data:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_writeback_tracking_active && lw_response_captured &&
+            lw_lsu_completion_event
+            |-> u_fullcore.u_cva5_core.unit_wb[LS_ID].rd ==
+                captured_lw_rdata);
+
+    fullcore_lw_writeback_destination:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_writeback_event
+            |-> anchored_lw_arch_rd == LW_ARCH_RD &&
+                anchored_lw_wb_group == LS_WB_GROUP &&
+                lw_writeback_group == anchored_lw_wb_group &&
+                lw_writeback_phys_rd == anchored_lw_phys_rd);
+
+    fullcore_lw_writeback_data:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_writeback_event
+            |-> lw_writeback_data == captured_lw_rdata);
+
+    fullcore_lw_register_file_write_port:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_writeback_event
+            |-> lw_register_file_write_event &&
+                u_fullcore.u_cva5_core.wb_packet[1].valid &&
+                u_fullcore.u_cva5_core.wb_packet[1].id == anchored_lw_id &&
+                u_fullcore.u_cva5_core.wb_packet[1].data == captured_lw_rdata &&
+                u_fullcore.u_cva5_core.wb_phys_addr[1] == anchored_lw_phys_rd);
+
+    fullcore_lw_register_file_update:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_register_file_write_event
+            |=> u_fullcore.u_cva5_core.register_file_block.register_file_gen[1].
+                    register_file_bank.xilinx_gen.ram[$past(anchored_lw_phys_rd)] ==
+                        $past(captured_lw_rdata));
+
+    fullcore_lw_architectural_x2_update:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_retire_event
+            |-> u_fullcore.u_cva5_core.renamer_block.spec_table_ram.xilinx_gen.ram[5'd2] ==
+                    {anchored_lw_phys_rd, anchored_lw_wb_group} &&
+                u_fullcore.u_cva5_core.register_file_block.register_file_gen[1].
+                    register_file_bank.xilinx_gen.ram[anchored_lw_phys_rd] ==
+                        captured_lw_rdata);
+
+    fullcore_lw_instruction_result:
+        assert property (@(posedge clk) disable iff (rst)
+            lw_retire_event
+            |-> lw_writeback_seen &&
+                anchored_lw_arch_rd == LW_ARCH_RD &&
+                lw_arch_x2_update_event);
+
     /////////////////////////////////////////////////////////////////
     // COVER
     /////////////////////////////////////////////////////////////////
@@ -693,6 +917,15 @@ module cva5_axi_proof_framework_wrapper (
 
     cover_full_lw_to_axi_read_lifecycle:
         cover property (@(posedge clk) lw_lsu_completion_seen);
+
+    cover_full_lw_reaches_writeback:
+        cover property (@(posedge clk) lw_writeback_seen);
+
+    cover_full_lw_reaches_retirement:
+        cover property (@(posedge clk) lw_retire_seen);
+
+    cover_full_lw_updates_x2:
+        cover property (@(posedge clk) lw_arch_x2_update_seen);
 
     // End-to-end covers
     // Instruction-correlated reachability. These covers add no constraints.
