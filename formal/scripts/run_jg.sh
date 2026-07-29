@@ -70,12 +70,14 @@ fi
 
 export CVA5_ROOT="${REPO_ROOT}"
 export JG_CVA5_RTL_PATH="${REPO_ROOT}"
+export JG_GUI="${GUI}"
 
 if [[ -z "${RUN_NAME}" ]]; then
     RUN_NAME="$(date +%Y%m%d_%H%M%S)"
 fi
 
 RUN_DIR="${REPO_ROOT}/formal/runs/${TARGET}/${RUN_NAME}"
+export JG_RUN_DIR="${RUN_DIR}"
 PROJECT_DIR="${RUN_DIR}/jgproject"
 LOG_FILE="${RUN_DIR}/jg.log"
 mkdir -p "${PROJECT_DIR}"
@@ -89,6 +91,9 @@ mkdir -p "${PROJECT_DIR}"
     if [[ -n "${JG_PROPERTY:-}" ]]; then
         echo "property=${JG_PROPERTY}"
     fi
+    if [[ -n "${JG_STAGE:-}" ]]; then
+        echo "stage=${JG_STAGE}"
+    fi
     if [[ -n "${JG_TIME_LIMIT:-}" ]]; then
         echo "time_limit=${JG_TIME_LIMIT}"
     fi
@@ -97,6 +102,33 @@ mkdir -p "${PROJECT_DIR}"
     fi
     if [[ -n "${AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS:-}" ]]; then
         echo "axi_write_include_undriven_fields=${AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS}"
+    fi
+    if [[ -n "${JG_FRAMEWORK_RUN_PROOFS:-}" ]]; then
+        echo "framework_run_proofs=${JG_FRAMEWORK_RUN_PROOFS}"
+    fi
+    if [[ -n "${JG_CVA5_FRAMEWORK_RUN_PROOFS:-}" ]]; then
+        echo "cva5_framework_run_proofs=${JG_CVA5_FRAMEWORK_RUN_PROOFS}"
+    fi
+    if [[ -n "${JG_CVA5_FRAMEWORK_RUN_REACHABILITY:-}" ]]; then
+        echo "cva5_framework_run_reachability=${JG_CVA5_FRAMEWORK_RUN_REACHABILITY}"
+    fi
+    if [[ -n "${JG_CVA5_FRAMEWORK_RUN_DEEP_RESPONSE:-}" ]]; then
+        echo "cva5_framework_run_deep_response=${JG_CVA5_FRAMEWORK_RUN_DEEP_RESPONSE}"
+    fi
+    if [[ -n "${JG_CVA5_FRAMEWORK_LOAD_STAGE:-}" ]]; then
+        echo "cva5_framework_load_stage=${JG_CVA5_FRAMEWORK_LOAD_STAGE}"
+    fi
+    if [[ -n "${JG_CVA5_FRAMEWORK_SAFETY_STAGE:-}" ]]; then
+        echo "cva5_framework_safety_stage=${JG_CVA5_FRAMEWORK_SAFETY_STAGE}"
+    fi
+    if [[ -n "${JG_CVA5_LOAD_MAX_JOBS:-}" ]]; then
+        echo "cva5_load_max_jobs=${JG_CVA5_LOAD_MAX_JOBS}"
+    fi
+    if [[ -n "${JG_CVA5_LOAD_ORCHESTRATION:-}" ]]; then
+        echo "cva5_load_orchestration=${JG_CVA5_LOAD_ORCHESTRATION}"
+    fi
+    if [[ -n "${JG_CVA5_LOAD_DUMP_TRACE:-}" ]]; then
+        echo "cva5_load_dump_trace=${JG_CVA5_LOAD_DUMP_TRACE}"
     fi
     if [[ -n "${JG_ENGINE_MODE:-}" ]]; then
         echo "engine_mode=${JG_ENGINE_MODE}"

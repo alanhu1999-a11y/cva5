@@ -14,18 +14,20 @@ if {![info exists env(JG_PROPERTY)] || $env(JG_PROPERTY) eq ""} {
 }
 
 if {[string match "dut_*" $env(JG_PROPERTY)]
-    || [string match "cut_*" $env(JG_PROPERTY)]
     || [string match "debug_*" $env(JG_PROPERTY)]
-    || $env(JG_PROPERTY) eq "cover_read_request"
-    || $env(JG_PROPERTY) eq "cover_read_backpressure"
-    || $env(JG_PROPERTY) eq "cover_read_response"
-    || $env(JG_PROPERTY) eq "cover_read_response_lifecycle"
-    || $env(JG_PROPERTY) eq "cover_addr_changes_during_requesting_read_wait"
-    || $env(JG_PROPERTY) eq "cover_cut_violation_arvalid_drop"
-    || $env(JG_PROPERTY) eq "cover_tracked_arvalid_drop"} {
+    || [string match "cover_*" $env(JG_PROPERTY)]} {
     set PROPERTY_PATH ${AXI_MASTER_READ_HARNESS}.$env(JG_PROPERTY)
 } else {
     set PROPERTY_PATH ${AXI_MASTER_READ_PROPS}.$env(JG_PROPERTY)
+}
+
+if {[info exists env(AXI_READ_USE_PROVEN_LEMMAS)] &&
+        $env(AXI_READ_USE_PROVEN_LEMMAS) eq "1" &&
+        $env(JG_PROPERTY) in {
+            dut_arvalid_backpressure_implies_requesting_read
+            dut_requesting_read_holds_arvalid
+        }} {
+    error "Source lemma $env(JG_PROPERTY) is assumed in cut mode. Prove it independently with USE_PROVEN_LEMMAS=0."
 }
 
 puts "Proving read-only AXI master property: $PROPERTY_PATH"

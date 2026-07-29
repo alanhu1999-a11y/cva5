@@ -22,7 +22,7 @@ analyze -sv [file join $TYPES_DIR internal_interfaces.sv]
 analyze -sv [file join $TYPES_DIR external_interfaces.sv]
 analyze -sv [file join $CVA5_ROOT core memory_sub_units axi_master.sv]
 analyze -sv [file join $CVA5_ROOT formal interfaces axi4_basic_props.sv]
-analyze -sv [file join $CVA5_ROOT formal models axi_master_formal_wrapper.sv]
+analyze -sv [file join $CVA5_ROOT formal models legacy axi_master_formal_wrapper.sv]
 
 elaborate -top axi_master_formal_wrapper
 

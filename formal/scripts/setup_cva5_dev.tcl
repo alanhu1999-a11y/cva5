@@ -28,9 +28,9 @@ set FILELIST_PATH ../../cva5/formal/filelists/cva5_rtl.vfile
 set JG_CVA5_RTL_PATH ../../cva5
 
 analyze -sv -f ${FILELIST_PATH}
-analyze -sv ${JG_CVA5_RTL_PATH}/formal/models/cva5_fbm.sv
+analyze -sv ${JG_CVA5_RTL_PATH}/formal/models/full_core/cva5_fbm.sv
 analyze -sv ${JG_CVA5_RTL_PATH}/formal/interfaces/axi4_basic_props.sv
-analyze -sv ${JG_CVA5_RTL_PATH}/formal/models/cva5_formal_wrapper.sv
+analyze -sv ${JG_CVA5_RTL_PATH}/formal/models/full_core/cva5_formal_wrapper.sv
 elaborate -top cva5_formal_wrapper \
 -bbox_a 17000 -bbox_mul 67 \
 -bbox_m sixinput_pop_count

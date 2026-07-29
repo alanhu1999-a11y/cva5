@@ -35,7 +35,7 @@ analyze -sv [file join $TYPES_DIR internal_interfaces.sv]
 analyze -sv [file join $TYPES_DIR external_interfaces.sv]
 analyze -sv [file join $CVA5_ROOT core memory_sub_units axi_master.sv]
 analyze -sv {*}$AXI_MASTER_WRITE_ANALYZE_ARGS [file join $CVA5_ROOT formal interfaces axi4_basic_props.sv]
-analyze -sv {*}$AXI_MASTER_WRITE_ANALYZE_ARGS [file join $CVA5_ROOT formal models axi_master_write_formal_wrapper.sv]
+analyze -sv {*}$AXI_MASTER_WRITE_ANALYZE_ARGS [file join $CVA5_ROOT formal models unit_axi_master axi_master_write_formal_wrapper.sv]
 
 if {![info exists AXI_MASTER_WRITE_TOP]} {
     error "AXI_MASTER_WRITE_TOP must be set before sourcing _axi_master_write_common.tcl"

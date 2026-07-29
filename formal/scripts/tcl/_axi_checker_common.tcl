@@ -14,7 +14,7 @@ source [file join $CVA5_ROOT formal scripts tcl _proof_limits.tcl]
 analyze -sv [file join $CVA5_ROOT core types_and_interfaces cva5_config.sv]
 analyze -sv [file join $CVA5_ROOT core types_and_interfaces external_interfaces.sv]
 analyze -sv [file join $CVA5_ROOT formal interfaces axi4_basic_props.sv]
-analyze -sv [file join $CVA5_ROOT formal models axi_checker_formal_wrapper.sv]
+analyze -sv [file join $CVA5_ROOT formal models legacy axi_checker_formal_wrapper.sv]
 
 elaborate -top axi_checker_formal_wrapper
 

@@ -1,7 +1,14 @@
 # Shared Jasper setup for CVA5 AXI formal targets.
 
 clear -all
-set_engine_mode {B}
+
+if {[info exists env(JG_ENGINE_MODE)] && $env(JG_ENGINE_MODE) ne ""} {
+    set CVA5_AXI_ENGINE_MODE $env(JG_ENGINE_MODE)
+} else {
+    set CVA5_AXI_ENGINE_MODE auto
+}
+puts "CVA5 AXI engine mode: $CVA5_AXI_ENGINE_MODE"
+set_engine_mode $CVA5_AXI_ENGINE_MODE
 
 if {[info exists env(CVA5_ROOT)]} {
     set CVA5_ROOT [file normalize $env(CVA5_ROOT)]
@@ -16,14 +23,16 @@ set env(JG_CVA5_RTL_PATH) $CVA5_ROOT
 set JG_CVA5_RTL_PATH $CVA5_ROOT
 set FILELIST_PATH [file join $CVA5_ROOT formal filelists cva5_rtl.vfile]
 
+source [file join $CVA5_ROOT formal scripts tcl _proof_limits.tcl]
+
 if {![file exists $FILELIST_PATH]} {
     error "RTL filelist not found: $FILELIST_PATH. Run make formal-filelist first."
 }
 
 analyze -sv -f $FILELIST_PATH
 analyze -sv [file join $CVA5_ROOT formal interfaces axi4_basic_props.sv]
-analyze -sv [file join $CVA5_ROOT formal models cva5_fbm.sv]
-analyze -sv [file join $CVA5_ROOT formal models cva5_formal_wrapper.sv]
+analyze -sv [file join $CVA5_ROOT formal models full_core cva5_fbm.sv]
+analyze -sv [file join $CVA5_ROOT formal models full_core cva5_formal_wrapper.sv]
 
 elaborate -top cva5_formal_wrapper \
     -bbox_a 17000 \
@@ -33,5 +42,6 @@ elaborate -top cva5_formal_wrapper \
 clock clk
 reset rst
 
-set AXI_PROPS <embedded>::cva5_formal_wrapper.u_cva5_fbm.u_ppb_axi
-set FBM <embedded>::cva5_formal_wrapper.u_cva5_fbm
+set WRAPPER <embedded>::cva5_formal_wrapper
+set AXI_PROPS ${WRAPPER}.u_cva5_fbm.u_ppb_axi
+set FBM ${WRAPPER}.u_cva5_fbm

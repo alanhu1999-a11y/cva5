@@ -14,11 +14,7 @@ if {![info exists env(JG_PROPERTY)] || $env(JG_PROPERTY) eq ""} {
 }
 
 if {[string match "dut_*" $env(JG_PROPERTY)]
-    || $env(JG_PROPERTY) eq "cover_write_request"
-    || $env(JG_PROPERTY) eq "cover_aw_backpressure"
-    || $env(JG_PROPERTY) eq "cover_w_backpressure"
-    || $env(JG_PROPERTY) eq "cover_write_address_data_accept"
-    || $env(JG_PROPERTY) eq "cover_write_response_lifecycle"} {
+    || [string match "cover_*" $env(JG_PROPERTY)]} {
     set PROPERTY_PATH ${AXI_MASTER_WRITE_HARNESS}.$env(JG_PROPERTY)
 } else {
     set PROPERTY_PATH ${AXI_MASTER_WRITE_PROPS}.$env(JG_PROPERTY)

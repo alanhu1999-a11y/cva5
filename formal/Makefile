@@ -3,6 +3,51 @@ TIME_LIMIT ?= 5m
 USE_PROVEN_LEMMAS ?= 0
 ENGINE_MODE ?= auto
 INCLUDE_UNDRIVEN_FIELDS ?= 0
+FRAMEWORK_RUN_PROOFS ?= 1
+CVA5_FRAMEWORK_RUN_PROOFS ?= 1
+CVA5_FRAMEWORK_RUN_REACHABILITY ?= 0
+CVA5_FRAMEWORK_RUN_DEEP_RESPONSE ?= 0
+CVA5_LOAD_MAX_JOBS ?= 2
+CVA5_LOAD_ORCHESTRATION ?= off
+CVA5_LOAD_DUMP_TRACE ?= 0
+
+CVA5_AXI_LOAD_STAGES = \
+	reset_release \
+	startup_complete \
+	instruction_request \
+	instruction_return \
+	debug_fetch_request_alloc \
+	debug_icache_line_complete \
+	debug_icache_request_queued \
+	debug_icache_restart \
+	debug_icache_lw_hit \
+	debug_fetch_lw_raw \
+	fetch_complete \
+	debug_lui_decode \
+	debug_lui_issue \
+	debug_lui_writeback \
+	decode \
+	debug_lw_source_mapping \
+	issue \
+	debug_lw_source_value \
+	debug_lw_source_mismatch \
+	lsu_command \
+	debug_dtlb_bus_match \
+	debug_lsq_load_valid \
+	debug_axi_subunit_ready \
+	lsu_request_accept \
+	axi_master_requesting_read \
+	axi_arvalid \
+	axi_ar_handshake \
+	axi_r_response \
+	lsu_completion \
+	full_lifecycle
+
+CVA5_AXI_SAFETY_STAGES = \
+	load_accept_enters_requesting_read \
+	requesting_read_drives_arvalid \
+	embedded_arvalid_hold \
+	embedded_araddr_stability
 
 RUN_OPTS = GUI=$(GUI) TIME_LIMIT=$(TIME_LIMIT) ENGINE_MODE=$(ENGINE_MODE)
 UNIT_OPTS = $(RUN_OPTS) INCLUDE_UNDRIVEN_FIELDS=0
@@ -124,6 +169,8 @@ CVA5_REACHABILITY_WRITE_BACKPRESSURE_STAGES = \
 	axi_w_wait_19
 
 CVA5_LISTED_STAGES = $(sort \
+	$(CVA5_AXI_LOAD_STAGES) \
+	$(CVA5_AXI_SAFETY_STAGES) \
 	$(CVA5_REACHABILITY_STAGES) \
 	$(CVA5_FETCH_LOCAL_LADDER_STAGES) \
 	$(CVA5_AXI_DEBUG_LADDER_STAGES) \
@@ -155,6 +202,9 @@ help formal-help:
 	@echo "CVA5 formal targets"
 	@echo
 	@echo "Main unit-level closure commands:"
+	@echo "  make formal-axi-master-proof-framework GUI=1 ENGINE_MODE=auto"
+	@echo "    includes branch/statement COI Checker Coverage after the proof roots"
+	@echo "    add FRAMEWORK_RUN_PROOFS=0 to inspect the unrun task/Proof Structure manifest"
 	@echo "  make formal-axi-master-unit-closure GUI=0 TIME_LIMIT=5m ENGINE_MODE=auto"
 	@echo "  make formal-axi-master-read-closure GUI=0 TIME_LIMIT=5m ENGINE_MODE=auto"
 	@echo "  make formal-axi-master-write-closure GUI=0 TIME_LIMIT=5m ENGINE_MODE=auto"
@@ -167,6 +217,16 @@ help formal-help:
 	@echo "  make formal-axi-checker-property PROPERTY=<helper_name> GUI=0 TIME_LIMIT=5m ENGINE_MODE=auto"
 	@echo
 	@echo "Full-core and fetch reachability:"
+	@echo "  make formal-cva5-axi-proof-framework GUI=1 TIME_LIMIT=5m ENGINE_MODE=auto"
+	@echo "    runs embedded-instance safety roots and scoped COI coverage by default"
+	@echo "    add CVA5_FRAMEWORK_RUN_REACHABILITY=1 to run broad base covers"
+	@echo "    add CVA5_FRAMEWORK_RUN_DEEP_RESPONSE=1 for resource-intensive LSU/data checks"
+	@echo "    add CVA5_FRAMEWORK_RUN_PROOFS=0 for task/Proof Structure setup only"
+	@echo "  make formal-cva5-axi-load-reachability GUI=1 TIME_LIMIT=5m ENGINE_MODE=auto"
+	@echo "  make formal-cva5-axi-load-stage STAGE=<stage> GUI=0 TIME_LIMIT=5m ENGINE_MODE=auto"
+	@echo "  make formal-cva5-axi-load-list-stages"
+	@echo "  make formal-cva5-axi-safety-stage STAGE=<stage> GUI=0 TIME_LIMIT=5m ENGINE_MODE=auto"
+	@echo "  make formal-cva5-axi-safety-list-stages"
 	@echo "  make formal-cva5-list-stages"
 	@echo "  make formal-cva5-reachability-stage STAGE=<stage> GUI=0 TIME_LIMIT=5m ENGINE_MODE=auto"
 	@echo "  make formal-cva5-fetch-local-stage STAGE=<stage> GUI=0 TIME_LIMIT=5m ENGINE_MODE=auto"
@@ -195,6 +255,34 @@ formal-axi-property:
 formal-cva5-reachability-stage:
 	@test -n "$(STAGE)" || (echo "error: set STAGE=<stage>; see PROOF_DASHBOARD.md for stage names" >&2; exit 1)
 	JG_STAGE='$(STAGE)' JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target cva5_reachability_stage --gui $(GUI)
+
+.PHONY: formal-cva5-axi-proof-framework
+formal-cva5-axi-proof-framework:
+	JG_CVA5_FRAMEWORK_RUN_PROOFS='$(CVA5_FRAMEWORK_RUN_PROOFS)' JG_CVA5_FRAMEWORK_RUN_REACHABILITY='$(CVA5_FRAMEWORK_RUN_REACHABILITY)' JG_CVA5_FRAMEWORK_RUN_DEEP_RESPONSE='$(CVA5_FRAMEWORK_RUN_DEEP_RESPONSE)' JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target cva5_axi_proof_framework --gui $(GUI)
+
+.PHONY: formal-cva5-axi-load-stage
+formal-cva5-axi-load-stage:
+	@test -n "$(STAGE)" || (echo "error: set STAGE=<stage>; run make formal-cva5-axi-load-list-stages" >&2; exit 1)
+	JG_CVA5_FRAMEWORK_LOAD_STAGE='$(STAGE)' JG_CVA5_LOAD_MAX_JOBS='$(CVA5_LOAD_MAX_JOBS)' JG_CVA5_LOAD_ORCHESTRATION='$(CVA5_LOAD_ORCHESTRATION)' JG_CVA5_LOAD_DUMP_TRACE='$(CVA5_LOAD_DUMP_TRACE)' JG_CVA5_FRAMEWORK_RUN_PROOFS=1 JG_CVA5_FRAMEWORK_RUN_REACHABILITY=0 JG_CVA5_FRAMEWORK_RUN_DEEP_RESPONSE=0 JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target cva5_axi_proof_framework --gui $(GUI)
+
+.PHONY: formal-cva5-axi-load-reachability
+formal-cva5-axi-load-reachability:
+	$(MAKE) formal-cva5-axi-load-stage STAGE=all $(RUN_OPTS)
+
+.PHONY: formal-cva5-axi-load-list-stages
+formal-cva5-axi-load-list-stages:
+	@echo "Anchored full-core LW reachability STAGE values:"
+	@printf '  %s\n' $(CVA5_AXI_LOAD_STAGES)
+
+.PHONY: formal-cva5-axi-safety-stage
+formal-cva5-axi-safety-stage:
+	@test -n "$(STAGE)" || (echo "error: set STAGE=<stage>; run make formal-cva5-axi-safety-list-stages" >&2; exit 1)
+	JG_CVA5_FRAMEWORK_SAFETY_STAGE='$(STAGE)' JG_CVA5_FRAMEWORK_RUN_PROOFS=1 JG_CVA5_FRAMEWORK_RUN_REACHABILITY=0 JG_CVA5_FRAMEWORK_RUN_DEEP_RESPONSE=0 JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target cva5_axi_proof_framework --gui $(GUI)
+
+.PHONY: formal-cva5-axi-safety-list-stages
+formal-cva5-axi-safety-list-stages:
+	@echo "Embedded full-core AXI safety STAGE values:"
+	@printf '  %s\n' $(CVA5_AXI_SAFETY_STAGES)
 
 .PHONY: formal-cva5-fetch-local-stage
 formal-cva5-fetch-local-stage:
@@ -317,6 +405,10 @@ formal-axi-master-unit-closure:
 	$(MAKE) formal-axi-master-read-closure $(RUN_OPTS)
 	$(MAKE) formal-axi-master-write-closure $(UNIT_OPTS)
 	$(MAKE) formal-axi-master-combined-closure $(UNIT_OPTS)
+
+.PHONY: formal-axi-master-proof-framework
+formal-axi-master-proof-framework:
+	AXI_WRITE_INCLUDE_UNDRIVEN_FIELDS='$(INCLUDE_UNDRIVEN_FIELDS)' JG_FRAMEWORK_RUN_PROOFS='$(FRAMEWORK_RUN_PROOFS)' JG_TIME_LIMIT='$(TIME_LIMIT)' JG_ENGINE_MODE='$(ENGINE_MODE)' scripts/run_jg.sh --target axi_master_proof_framework --gui $(GUI) --no-filelist
 
 .PHONY: formal-axi-checker-property
 formal-axi-checker-property:

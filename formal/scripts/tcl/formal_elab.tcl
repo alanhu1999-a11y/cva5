@@ -4,7 +4,14 @@
 # but stops before clocks, resets, assumptions, covers, or proofs are applied.
 
 clear -all
-set_engine_mode {B}
+
+if {[info exists env(JG_ENGINE_MODE)] && $env(JG_ENGINE_MODE) ne ""} {
+    set CVA5_ELAB_ENGINE_MODE $env(JG_ENGINE_MODE)
+} else {
+    set CVA5_ELAB_ENGINE_MODE auto
+}
+puts "CVA5 elab engine mode: $CVA5_ELAB_ENGINE_MODE"
+set_engine_mode $CVA5_ELAB_ENGINE_MODE
 
 if {[info exists env(CVA5_ROOT)]} {
     set CVA5_ROOT [file normalize $env(CVA5_ROOT)]
@@ -24,8 +31,8 @@ if {![file exists $FILELIST_PATH]} {
 
 analyze -sv -f $FILELIST_PATH
 analyze -sv [file join $CVA5_ROOT formal interfaces axi4_basic_props.sv]
-analyze -sv [file join $CVA5_ROOT formal models cva5_fbm.sv]
-analyze -sv [file join $CVA5_ROOT formal models cva5_formal_wrapper.sv]
+analyze -sv [file join $CVA5_ROOT formal models full_core cva5_fbm.sv]
+analyze -sv [file join $CVA5_ROOT formal models full_core cva5_formal_wrapper.sv]
 
 elaborate -top cva5_formal_wrapper \
     -bbox_a 17000 \

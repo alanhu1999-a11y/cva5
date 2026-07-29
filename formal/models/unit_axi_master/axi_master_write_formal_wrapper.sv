@@ -20,6 +20,10 @@ module axi_master_write_harness
     input logic [5:0]  axi_bid
 );
 
+    /////////////////////////////////////////////////////////////////
+    // INTERFACES
+    /////////////////////////////////////////////////////////////////
+
     axi_interface axi_if();
     amo_interface amo_if();
     memory_sub_unit_interface ls_if();
@@ -60,6 +64,31 @@ module axi_master_write_harness
     assign axi_if.rlast = 1'b0;
     assign axi_if.rid = '0;
 
+    /////////////////////////////////////////////////////////////////
+    // DUT
+    /////////////////////////////////////////////////////////////////
+
+    axi_master u_dut (
+        .clk,
+        .rst,
+        .write_outstanding,
+        .m_axi         (axi_if),
+        .amo           (1'b0),
+        .amo_type      (AMO_ADD_FN5),
+        .amo_unit      (amo_if),
+        .ls            (ls_if)
+    );
+
+    axi4_basic_props u_axi_props (
+        .clk,
+        .rst    (rst | !formal_active),
+        .axi_if (axi_if)
+    );
+
+    /////////////////////////////////////////////////////////////////
+    // formal helper signals
+    /////////////////////////////////////////////////////////////////
+
     always_ff @(posedge clk) begin
         if (rst)
             formal_active <= 1'b0;
@@ -92,6 +121,10 @@ module axi_master_write_harness
         end
     end
 
+    /////////////////////////////////////////////////////////////////
+    // ENVIRONMENT ASSUMPTIONS
+    /////////////////////////////////////////////////////////////////
+
     env_legal_write_request: assume property (@(posedge clk) disable iff (rst)
         ls_new_request |-> ls_if.ready);
 
@@ -116,35 +149,25 @@ module axi_master_write_harness
         end
     endgenerate
 
-    axi_master u_dut (
-        .clk,
-        .rst,
-        .write_outstanding,
-        .m_axi         (axi_if),
-        .amo           (1'b0),
-        .amo_type      (AMO_ADD_FN5),
-        .amo_unit      (amo_if),
-        .ls            (ls_if)
-    );
-
-    axi4_basic_props u_axi_props (
-        .clk,
-        .rst    (rst | !formal_active),
-        .axi_if (axi_if)
-    );
+    /////////////////////////////////////////////////////////////////
+    // DUT PROPERTIES ASSERTIONS
+    /////////////////////////////////////////////////////////////////
 
     assign dut_in_requesting_write = u_dut.current_state == u_dut.REQUESTING_WRITE;
     assign dut_in_waiting_write = u_dut.current_state == u_dut.WAITING_WRITE;
 
+    // Request sequencing
     dut_write_request_enters_requesting_write: assert property (@(posedge clk) disable iff (rst | !formal_active)
         ls_new_request && ls_if.ready |=> dut_in_requesting_write);
 
     dut_write_request_drives_aw_w_valid: assert property (@(posedge clk) disable iff (rst | !formal_active)
         ls_new_request && ls_if.ready |=> axi_if.awvalid && axi_if.wvalid);
 
+    // Mode isolation
     dut_write_only_no_read_valid: assert property (@(posedge clk) disable iff (rst | !formal_active)
         !axi_if.arvalid);
 
+    // AWVALID lemmas
     dut_awvalid_backpressure_implies_requesting_write: assert property (@(posedge clk) disable iff (rst | !formal_active)
         axi_if.awvalid && !axi_if.awready |-> dut_in_requesting_write);
 
@@ -154,6 +177,7 @@ module axi_master_write_harness
     dut_awvalid_holds_until_ready: assert property (@(posedge clk) disable iff (rst | !formal_active)
         axi_if.awvalid && !axi_if.awready |=> axi_if.awvalid);
 
+    // AW stability
     dut_requesting_write_holds_awaddr: assert property (@(posedge clk) disable iff (rst | !formal_active)
         dut_in_requesting_write && axi_if.awvalid && !axi_if.awready
         |=> $stable({axi_if.awaddr, axi_if.awlen, axi_if.awburst,
@@ -174,6 +198,7 @@ module axi_master_write_harness
                      axi_if.awid}));
 `endif
 
+    // WVALID lemmas
     dut_wvalid_backpressure_implies_requesting_write: assert property (@(posedge clk) disable iff (rst | !formal_active)
         axi_if.wvalid && !axi_if.wready |-> dut_in_requesting_write);
 
@@ -183,6 +208,7 @@ module axi_master_write_harness
     dut_wvalid_holds_until_ready: assert property (@(posedge clk) disable iff (rst | !formal_active)
         axi_if.wvalid && !axi_if.wready |=> axi_if.wvalid);
 
+    // W stability
     dut_requesting_write_holds_wdata: assert property (@(posedge clk) disable iff (rst | !formal_active)
         dut_in_requesting_write && axi_if.wvalid && !axi_if.wready
         |=> $stable({axi_if.wdata, axi_if.wstrb}));
@@ -198,6 +224,7 @@ module axi_master_write_harness
         |=> $stable({axi_if.wdata, axi_if.wstrb, axi_if.wlast}));
 `endif
 
+    // Write lifecycle
     dut_aw_accept_sets_aw_pending: assert property (@(posedge clk) disable iff (rst | !formal_active)
         aw_accepted && !b_accepted |=> aw_pending);
 
@@ -217,6 +244,7 @@ module axi_master_write_harness
     dut_waiting_write_holds_until_bvalid: assert property (@(posedge clk) disable iff (rst | !formal_active)
         dut_in_waiting_write && !axi_if.bvalid |=> dut_in_waiting_write);
 
+    // LSU completion
     dut_b_response_clears_pending_write: assert property (@(posedge clk) disable iff (rst | !formal_active)
         b_accepted |=> !write_pending);
 
@@ -232,6 +260,10 @@ module axi_master_write_harness
     dut_b_response_clears_write_outstanding: assert property (@(posedge clk) disable iff (rst | !formal_active)
         dut_in_waiting_write && b_accepted |=> !write_outstanding);
 
+    /////////////////////////////////////////////////////////////////
+    // COVER
+    /////////////////////////////////////////////////////////////////
+
     cover_write_request: cover property (@(posedge clk) disable iff (rst | !formal_active)
         ls_new_request);
 
@@ -240,9 +272,79 @@ module axi_master_write_harness
         axi_if.awvalid && !axi_if.awready ##[1:4]
         axi_if.awvalid && axi_if.awready);
 
+    cover_aw_ready_already_high: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        axi_if.awready && !axi_if.awvalid ##1
+        axi_if.awvalid && axi_if.awready);
+
+    cover_aw_ready_same_cycle_as_valid: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        !axi_if.awvalid && !axi_if.awready ##1
+        axi_if.awvalid && axi_if.awready);
+
+    cover_aw_wait_1_cycle: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        (axi_if.awvalid && !axi_if.awready)[*1] ##1
+        axi_if.awvalid && axi_if.awready);
+
+    cover_aw_wait_2_cycles: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        (axi_if.awvalid && !axi_if.awready)[*2] ##1
+        axi_if.awvalid && axi_if.awready);
+
+    cover_aw_wait_3_cycles: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        (axi_if.awvalid && !axi_if.awready)[*3] ##1
+        axi_if.awvalid && axi_if.awready);
+
+    cover_aw_wait_16_cycles: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        (axi_if.awvalid && !axi_if.awready)[*16] ##1
+        axi_if.awvalid && axi_if.awready);
+
+    cover_aw_wait_19_cycles: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        (axi_if.awvalid && !axi_if.awready)[*19] ##1
+        axi_if.awvalid && axi_if.awready);
+
     cover_w_backpressure: cover property (@(posedge clk) disable iff (rst | !formal_active)
         ls_new_request ##[1:4]
         axi_if.wvalid && !axi_if.wready ##[1:4]
+        axi_if.wvalid && axi_if.wready);
+
+    cover_w_ready_already_high: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        axi_if.wready && !axi_if.wvalid ##1
+        axi_if.wvalid && axi_if.wready);
+
+    cover_w_ready_same_cycle_as_valid: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        !axi_if.wvalid && !axi_if.wready ##1
+        axi_if.wvalid && axi_if.wready);
+
+    cover_w_wait_1_cycle: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        (axi_if.wvalid && !axi_if.wready)[*1] ##1
+        axi_if.wvalid && axi_if.wready);
+
+    cover_w_wait_2_cycles: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        (axi_if.wvalid && !axi_if.wready)[*2] ##1
+        axi_if.wvalid && axi_if.wready);
+
+    cover_w_wait_3_cycles: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        (axi_if.wvalid && !axi_if.wready)[*3] ##1
+        axi_if.wvalid && axi_if.wready);
+
+    cover_w_wait_16_cycles: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        (axi_if.wvalid && !axi_if.wready)[*16] ##1
+        axi_if.wvalid && axi_if.wready);
+
+    cover_w_wait_19_cycles: cover property (@(posedge clk) disable iff (rst | !formal_active)
+        ls_new_request && ls_if.ready ##[1:8]
+        (axi_if.wvalid && !axi_if.wready)[*19] ##1
         axi_if.wvalid && axi_if.wready);
 
     cover_write_address_data_accept: cover property (@(posedge clk) disable iff (rst | !formal_active)
@@ -275,30 +377,6 @@ module axi_master_write_formal_wrapper (
 
     axi_master_write_harness #(
         .BOUND_WRITE_READY_FOR_COVER(1'b0)
-    ) u_harness (
-        .*
-    );
-
-endmodule
-
-module axi_master_write_cover_wrapper (
-    input logic clk,
-    input logic rst,
-
-    input logic        ls_new_request,
-    input logic [31:0] ls_addr,
-    input logic [31:0] ls_data_in,
-    input logic [3:0]  ls_be,
-
-    input logic        axi_awready,
-    input logic        axi_wready,
-    input logic        axi_bvalid,
-    input logic [1:0]  axi_bresp,
-    input logic [5:0]  axi_bid
-);
-
-    axi_master_write_harness #(
-        .BOUND_WRITE_READY_FOR_COVER(1'b1)
     ) u_harness (
         .*
     );

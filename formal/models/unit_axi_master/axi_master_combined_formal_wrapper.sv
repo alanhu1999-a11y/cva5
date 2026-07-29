@@ -29,6 +29,10 @@ module axi_master_combined_harness
     input logic [5:0]  axi_bid
 );
 
+    /////////////////////////////////////////////////////////////////
+    // INTERFACES
+    /////////////////////////////////////////////////////////////////
+
     axi_interface axi_if();
     amo_interface amo_if();
     memory_sub_unit_interface ls_if();
@@ -83,6 +87,31 @@ module axi_master_combined_harness
     assign axi_if.bresp = axi_bresp;
     assign axi_if.bid = axi_bid;
 
+    /////////////////////////////////////////////////////////////////
+    // DUT
+    /////////////////////////////////////////////////////////////////
+
+    axi_master u_dut (
+        .clk,
+        .rst,
+        .write_outstanding,
+        .m_axi         (axi_if),
+        .amo           (1'b0),
+        .amo_type      (AMO_ADD_FN5),
+        .amo_unit      (amo_if),
+        .ls            (ls_if)
+    );
+
+    axi4_basic_props u_axi_props (
+        .clk,
+        .rst    (rst | !formal_active),
+        .axi_if (axi_if)
+    );
+
+    /////////////////////////////////////////////////////////////////
+    // formal helper signals
+    /////////////////////////////////////////////////////////////////
+
     always_ff @(posedge clk) begin
         if (rst)
             formal_active <= 1'b0;
@@ -133,6 +162,10 @@ module axi_master_combined_harness
         end
     end
 
+    /////////////////////////////////////////////////////////////////
+    // ENVIRONMENT ASSUMPTIONS
+    /////////////////////////////////////////////////////////////////
+
     // Legal LSU traffic is one request at a time: either read or write, not
     // both. A simultaneous re/we command is an unsupported environment case.
     env_legal_lsu_request_type: assume property (@(posedge clk) disable iff (rst)
@@ -171,22 +204,9 @@ module axi_master_combined_harness
         end
     endgenerate
 
-    axi_master u_dut (
-        .clk,
-        .rst,
-        .write_outstanding,
-        .m_axi         (axi_if),
-        .amo           (1'b0),
-        .amo_type      (AMO_ADD_FN5),
-        .amo_unit      (amo_if),
-        .ls            (ls_if)
-    );
-
-    axi4_basic_props u_axi_props (
-        .clk,
-        .rst    (rst | !formal_active),
-        .axi_if (axi_if)
-    );
+    /////////////////////////////////////////////////////////////////
+    // DUT PROPERTIES ASSERTIONS
+    /////////////////////////////////////////////////////////////////
 
     assign dut_in_ready = u_dut.current_state == u_dut.READY;
     assign dut_in_requesting_read = u_dut.current_state == u_dut.REQUESTING_READ;
@@ -194,6 +214,7 @@ module axi_master_combined_harness
     assign dut_in_requesting_write = u_dut.current_state == u_dut.REQUESTING_WRITE;
     assign dut_in_waiting_write = u_dut.current_state == u_dut.WAITING_WRITE;
 
+    // Request sequencing
     dut_legal_read_request_enters_requesting_read: assert property (@(posedge clk) disable iff (rst | !formal_active)
         ls_new_request && ls_if.ready && ls_if.re && !ls_if.we |=> dut_in_requesting_read);
 
@@ -203,6 +224,7 @@ module axi_master_combined_harness
     dut_request_accepted_only_from_ready_state: assert property (@(posedge clk) disable iff (rst | !formal_active)
         ls_new_request && ls_if.ready |-> dut_in_ready);
 
+    // Cross-channel safety
     dut_no_simultaneous_read_write_valid: assert property (@(posedge clk) disable iff (rst | !formal_active)
         !(axi_if.arvalid && (axi_if.awvalid || axi_if.wvalid)));
 
@@ -218,6 +240,7 @@ module axi_master_combined_harness
          (dut_in_waiting_read && !axi_if.rvalid) ||
          (dut_in_waiting_write && !axi_if.bvalid)) |-> !ls_if.ready);
 
+    // Request routing
     dut_read_request_drives_only_arvalid: assert property (@(posedge clk) disable iff (rst | !formal_active)
         ls_new_request && ls_if.ready && ls_if.re && !ls_if.we
         |=> axi_if.arvalid && !axi_if.awvalid && !axi_if.wvalid);
@@ -226,6 +249,7 @@ module axi_master_combined_harness
         ls_new_request && ls_if.ready && ls_if.we && !ls_if.re
         |=> axi_if.awvalid && axi_if.wvalid && !axi_if.arvalid);
 
+    // Read lifecycle
     dut_ar_accept_creates_read_pending: assert property (@(posedge clk) disable iff (rst | !formal_active)
         ar_accepted |=> read_pending);
 
@@ -250,6 +274,7 @@ module axi_master_combined_harness
     dut_rdata_maps_to_ls_data_out: assert property (@(posedge clk) disable iff (rst | !formal_active)
         read_completion |-> ls_if.data_out == rdata_q);
 
+    // Write lifecycle
     dut_aw_accept_sets_aw_pending: assert property (@(posedge clk) disable iff (rst | !formal_active)
         aw_accepted && !b_accepted |=> aw_pending);
 
@@ -280,6 +305,10 @@ module axi_master_combined_harness
 
     dut_b_response_clears_write_outstanding: assert property (@(posedge clk) disable iff (rst | !formal_active)
         dut_in_waiting_write && b_accepted |=> !write_outstanding);
+
+    /////////////////////////////////////////////////////////////////
+    // COVER
+    /////////////////////////////////////////////////////////////////
 
     cover_combined_read_request: cover property (@(posedge clk) disable iff (rst | !formal_active)
         ls_new_request && ls_if.ready && ls_if.re && !ls_if.we);
@@ -338,39 +367,6 @@ module axi_master_combined_formal_wrapper (
 
     axi_master_combined_harness #(
         .BOUND_READY_FOR_COVER(1'b0)
-    ) u_harness (
-        .*
-    );
-
-endmodule
-
-module axi_master_combined_cover_wrapper (
-    input logic clk,
-    input logic rst,
-
-    input logic        ls_new_request,
-    input logic        ls_re,
-    input logic        ls_we,
-    input logic [31:0] ls_addr,
-    input logic [31:0] ls_data_in,
-    input logic [3:0]  ls_be,
-
-    input logic        axi_arready,
-    input logic        axi_rvalid,
-    input logic [31:0] axi_rdata,
-    input logic [1:0]  axi_rresp,
-    input logic        axi_rlast,
-    input logic [5:0]  axi_rid,
-
-    input logic        axi_awready,
-    input logic        axi_wready,
-    input logic        axi_bvalid,
-    input logic [1:0]  axi_bresp,
-    input logic [5:0]  axi_bid
-);
-
-    axi_master_combined_harness #(
-        .BOUND_READY_FOR_COVER(1'b1)
     ) u_harness (
         .*
     );
