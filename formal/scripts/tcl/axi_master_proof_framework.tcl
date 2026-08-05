@@ -717,10 +717,7 @@ if {$FW_RUN_PROOFS eq "1"} {
 
 check_cov -configure -checker_mode coi
 if {[info exists env(JG_GUI)] && $env(JG_GUI) eq "1"} {
-    check_cov -configure_gui -task $FW_COVERAGE_TASKS
-}
-
-if {[info exists env(JG_GUI)] && $env(JG_GUI) eq "1"} {
+    # FPV displays measured coverage directly; stay in FPV for Proof Structure.
     proof_structure -set_visible_results proof_structure
     task -set READ__10_REACHABILITY -update_gui
 } else {
